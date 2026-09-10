@@ -73,9 +73,12 @@ jobs:
           name: assets
           path: public/build
 
+      # The whole suite, including tests/Feature/Security. Those are the cases most worth
+      # running on a machine that is not the author's, and a green build that reached green
+      # by not running them is worse than a red one.
       - name: Run the test suite (SQLite)
         if: matrix.database == 'sqlite'
-        run: php artisan test --exclude-testsuite="Feature/Security/UploadScanningTest"
+        run: php artisan test
 
       - name: Run migrations against MariaDB
         if: matrix.database == 'mariadb'
