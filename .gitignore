@@ -60,6 +60,17 @@ auth.json
 /scratchpad
 
 # ---------------------------------------------------------------------------
+# One-off maintenance scripts.
+#
+# A file dropped in the application root to do something once — seed demo data,
+# repair a row, back-fill a column. They are written against one installation at
+# one moment and are wrong everywhere else, and a script that writes to the
+# database is not something to ship to anybody, least of all into a web root.
+# ---------------------------------------------------------------------------
+/seed-demo.php
+/*.local.php
+
+# ---------------------------------------------------------------------------
 # Local toolchain shims.
 #
 # Some contributors keep a `./php` or `./composer` wrapper pointing at a
