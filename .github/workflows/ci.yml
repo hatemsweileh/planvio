@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   tests:
+    needs: assets  # ← ADD THIS LINE
     name: Tests · PHP ${{ matrix.php }} · ${{ matrix.database }}
     runs-on: ubuntu-latest
 
@@ -24,9 +25,6 @@ jobs:
         php: ['8.3', '8.4']
         database: [sqlite]
         include:
-          # Planvio ships against MySQL in production but the suite runs on SQLite for
-          # speed. The two disagree about index name length, nullable uniques and a few
-          # column types, so one matrix leg exercises the real target.
           - php: '8.4'
             database: mariadb
 
@@ -68,6 +66,12 @@ jobs:
         run: |
           cp .env.example .env
           php artisan key:generate
+
+      - name: Download built assets  # ← ADD THIS STEP
+        uses: actions/download-artifact@v4
+        with:
+          name: assets
+          path: public/build
 
       - name: Run the test suite
         if: matrix.database == 'sqlite'
@@ -120,10 +124,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Upload built assets  # ← ADD THIS STEP
+        uses: actions/upload-artifact@v4
+        with:
+          name: assets
+          path: public/build
+          retention-days: 1
+
       - name: Fail if a Tailwind class was lost
-        # A class assembled by interpolation compiles to nothing at all, silently. These
-        # are load-bearing utilities: if any is missing, the build succeeded and the UI
-        # did not.
         run: |
           CSS=$(find public/build/assets -name '*.css' | head -1)
           echo "Checking $CSS"
