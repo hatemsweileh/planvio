@@ -226,7 +226,7 @@ final class ProjectScreensTest extends TestCase
         $other = $this->makeWorkspace(['slug' => 'northwind']);
         $foreign = $this->makeProject($other);
 
-        $this->actingAs($this->member)
+        Livewire::actingAs($this->member)
             ->test(ProjectIndex::class, ['workspace' => $this->workspace])
             ->call('toggleFavouriteFor', $foreign->getKey())
             ->assertStatus(404);
