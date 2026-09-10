@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   tests:
-    needs: assets  # ← ADD THIS LINE
+    needs: assets
     name: Tests · PHP ${{ matrix.php }} · ${{ matrix.database }}
     runs-on: ubuntu-latest
 
@@ -67,15 +67,15 @@ jobs:
           cp .env.example .env
           php artisan key:generate
 
-      - name: Download built assets  # ← ADD THIS STEP
+      - name: Download built assets
         uses: actions/download-artifact@v4
         with:
           name: assets
           path: public/build
 
-      - name: Run the test suite
+      - name: Run the test suite (SQLite)
         if: matrix.database == 'sqlite'
-        run: php artisan test --exclude tests/Feature/Security/UploadScanningTest.php
+        run: php artisan test --exclude-testsuite="Feature/Security/UploadScanningTest"
 
       - name: Run migrations against MariaDB
         if: matrix.database == 'mariadb'
@@ -124,7 +124,7 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Upload built assets  # ← ADD THIS STEP
+      - name: Upload built assets
         uses: actions/upload-artifact@v4
         with:
           name: assets
