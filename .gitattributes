@@ -1,0 +1,39 @@
+* text=auto eol=lf
+
+# Binary assets: never normalise line endings, never try to diff.
+*.woff2 binary
+*.woff  binary
+*.ttf   binary
+*.otf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.pdf   binary
+*.zip   binary
+*.ai    binary
+
+# Better diffs.
+*.blade.php diff=html
+*.css       diff=css
+*.html      diff=html
+*.md        diff=markdown
+*.php       diff=php
+
+# GitHub's language statistics. Without these Planvio reads as a Blade project with a
+# large slice of "JSON", because lang/*.json holds 3,589 translation strings apiece.
+lang/**             linguist-detectable=false
+docs/**             linguist-documentation
+*.md                linguist-documentation
+public/fonts/**     linguist-vendored
+public/img/**       linguist-vendored
+design/**           linguist-vendored
+resources/views/**  linguist-language=Blade
+
+# Excluded from `git archive` — useful in the repository, not in a source tarball.
+/.github        export-ignore
+/.editorconfig  export-ignore
+/.gitattributes export-ignore
+/.gitignore     export-ignore

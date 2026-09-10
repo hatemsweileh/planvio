@@ -1,0 +1,112 @@
+name: Bug report
+description: Something in Planvio does not work the way it should
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. The most useful bug report is the one where somebody
+        else can reproduce the problem without asking you a follow-up question.
+
+        **If this is a security issue, please close this and report it privately instead:**
+        the [Security tab](https://github.com/hatemsweileh/planvio/security) → *Report a
+        vulnerability*. See [SECURITY.md](https://github.com/hatemsweileh/planvio/blob/main/SECURITY.md).
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before reporting
+      options:
+        - label: I checked [docs/LIMITATIONS.md](https://github.com/hatemsweileh/planvio/blob/main/docs/LIMITATIONS.md) and this is not a documented boundary
+          required: true
+        - label: I searched existing issues
+          required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you see, and what did you expect instead?
+      placeholder: |
+        I dragged a card from To Do to In Progress on the board. The card snapped back and
+        the status did not change. I expected it to stay in the new column.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: The shortest sequence that shows the problem.
+      placeholder: |
+        1. Sign in as a workspace member
+        2. Open a project's Board tab
+        3. Drag any card to another column
+        4. Reload the page
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Planvio version
+      description: Shown in Admin → System Information, and in the footer of the sign-in page.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: How is it installed?
+      options:
+        - Release ZIP on cPanel or shared hosting
+        - Release ZIP on a VPS
+        - From source (git clone)
+        - Local development
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        Most of this is on **Admin → System Information**, which you can paste wholesale.
+      placeholder: |
+        PHP:       8.3.14
+        Database:  MariaDB 10.11.6
+        Server:    LiteSpeed
+        Browser:   Firefox 131 on Windows
+        Language:  English / Arabic
+    validations:
+      required: true
+
+  - type: dropdown
+    id: ai-enabled
+    attributes:
+      label: Is AI enabled?
+      description: If the problem involves the AI layer, which mode was the workspace in?
+      options:
+        - "No, AI is off"
+        - "Yes — Assistant"
+        - "Yes — Copilot"
+        - "Yes — Autonomous"
+        - "Not relevant"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: |
+        From `storage/logs/`. **Please redact anything sensitive** — API keys, passwords,
+        tokens, real customer names — before pasting.
+      render: text
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots are very welcome, especially for a layout or right-to-left issue.

@@ -1,0 +1,912 @@
+@import 'tailwindcss';
+
+/*
+   Sources are the Blade and PHP that class names are written in, and nothing else.
+
+   The compiled-view cache (storage/framework/views) is deliberately NOT scanned. It is
+   generated, gitignored, and holds whatever happened to be rendered last, so scanning it
+   made the shipped stylesheet depend on the state of a cache directory: a build on a cold
+   cache and a build on a warm one produced different bytes, which is the opposite of the
+   reproducible asset vite.config.js promises to put in the release ZIP. It also pulled in
+   ~15 kB of vendor CSS — Ignition's exception page, mostly — that Planvio never renders.
+   Nothing is lost by dropping it: every class name Planvio emits is written literally in
+   the sources below, which is the only way Tailwind can see a class in the first place.
+   */
+@source '../views';
+@source '../../app/Livewire';
+@source '../../app/Support';
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------------------
+   Self-hosted Inter. No network dependency: Planvio installs air-gapped.
+   --------------------------------------------------------------------------- */
+@font-face {
+    font-family: 'InterVariable';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('/fonts/inter/inter-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+        U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212,
+        U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+    font-family: 'InterVariable';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('/fonts/inter/inter-latin-ext.woff2') format('woff2');
+    unicode-range: U+0100-02AF, U+0304, U+0308, U+0329, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+        U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+    font-family: 'InterVariable';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('/fonts/inter/inter-cyrillic.woff2') format('woff2');
+    unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+    font-family: 'InterVariable';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('/fonts/inter/inter-greek.woff2') format('woff2');
+    unicode-range: U+0370-03FF;
+}
+@font-face {
+    font-family: 'InterVariable';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('/fonts/inter/inter-vietnamese.woff2') format('woff2');
+    unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1,
+        U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+
+/*
+   Inter has no Arabic coverage at all, so an Arabic interface falls through to whatever
+   the browser happens to have — Tahoma on one machine, a Naskh face on the next — and the
+   two halves of a bilingual screen stop looking like one product. Noto Sans Arabic is
+   vendored beside Inter for the same reason Inter is: this ships to servers with no
+   outbound network, so a webfont CDN is not an option.
+
+   The `unicode-range` is what keeps Latin on Inter: the browser only fetches and only uses
+   this face for the code points below, so a Latin-only session never downloads it and an
+   Arabic sentence with a task key in it still renders the key in Inter.
+
+   Noto Sans Arabic, SIL Open Font License 1.1 — public/fonts/noto-sans-arabic/LICENSE.txt.
+*/
+@font-face {
+    font-family: 'Noto Sans Arabic';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('/fonts/noto-sans-arabic/noto-sans-arabic.woff2') format('woff2');
+    unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
+}
+
+/* ---------------------------------------------------------------------------
+   Design tokens.
+   The brand scale is anchored so brand-600 is exactly the logo blue #3F66B0.
+   --------------------------------------------------------------------------- */
+@theme {
+    /* Noto Sans Arabic sits after Inter so Latin still resolves to Inter first. */
+    --font-sans: 'InterVariable', 'Noto Sans Arabic', ui-sans-serif, system-ui, -apple-system,
+        'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif,
+        'Apple Color Emoji', 'Segoe UI Emoji';
+    --font-mono: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Consolas, monospace;
+
+    --color-brand-50: #f5f7fd;
+    --color-brand-100: #e9eef9;
+    --color-brand-200: #cbd8f0;
+    --color-brand-300: #a6bbe3;
+    --color-brand-400: #7695d0;
+    --color-brand-500: #5379c1;
+    --color-brand-600: #3f66b0;
+    --color-brand-700: #315290;
+    --color-brand-800: #294170;
+    --color-brand-900: #223558;
+    --color-brand-950: #152138;
+
+    --color-ink-50: #f9fafb;
+    --color-ink-100: #f3f4f7;
+    --color-ink-200: #e4e7ec;
+    --color-ink-300: #ced2da;
+    --color-ink-400: #9aa0ac;
+    --color-ink-500: #6e7581;
+    --color-ink-600: #535965;
+    --color-ink-700: #3d424d;
+    --color-ink-800: #2a2e37;
+    --color-ink-900: #1b1f27;
+    --color-ink-950: #101319;
+
+    --color-positive-50: #ecfdf5;
+    --color-positive-100: #d1fae5;
+    --color-positive-500: #10b981;
+    --color-positive-600: #059669;
+    --color-positive-700: #047857;
+    --color-positive-950: #052e21;
+
+    --color-caution-50: #fffbeb;
+    --color-caution-100: #fef3c7;
+    --color-caution-500: #f59e0b;
+    --color-caution-600: #d97706;
+    --color-caution-700: #b45309;
+    --color-caution-950: #3a2306;
+
+    --color-critical-50: #fef2f2;
+    --color-critical-100: #fee2e2;
+    --color-critical-500: #ef4444;
+    --color-critical-600: #dc2626;
+    --color-critical-700: #b91c1c;
+    --color-critical-950: #3f1010;
+
+    --color-accent-50: #faf5ff;
+    --color-accent-100: #f3e8ff;
+    --color-accent-500: #a855f7;
+    --color-accent-600: #9333ea;
+    --color-accent-950: #2c0f47;
+
+    --radius-sm: 0.375rem;
+    --radius-DEFAULT: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
+    --radius-2xl: 1.25rem;
+
+    --text-2xs: 0.6875rem;
+    --text-2xs--line-height: 1rem;
+
+    --shadow-panel: 0 1px 2px 0 rgb(16 19 25 / 0.04), 0 1px 3px 0 rgb(16 19 25 / 0.06);
+    --shadow-raised: 0 4px 12px -2px rgb(16 19 25 / 0.08), 0 2px 4px -2px rgb(16 19 25 / 0.04);
+    --shadow-overlay: 0 16px 48px -12px rgb(16 19 25 / 0.22), 0 4px 12px -4px rgb(16 19 25 / 0.1);
+
+    --ease-snap: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* ---------------------------------------------------------------------------
+   Semantic surface tokens. These flip with the theme; components reference
+   these rather than raw scale steps, so a workspace accent swap is one variable.
+   --------------------------------------------------------------------------- */
+@layer base {
+    :root {
+        --surface-canvas: var(--color-ink-100);
+        --surface-panel: #ffffff;
+        --surface-raised: #ffffff;
+        --surface-sunken: var(--color-ink-50);
+        --surface-hover: var(--color-ink-100);
+        --surface-active: var(--color-ink-200);
+        --surface-inverse: var(--color-ink-900);
+
+        --line-subtle: var(--color-ink-200);
+        --line-DEFAULT: var(--color-ink-300);
+        --line-strong: var(--color-ink-400);
+
+        --text-strong: var(--color-ink-950);
+        --text-DEFAULT: var(--color-ink-800);
+        --text-muted: var(--color-ink-500);
+        --text-subtle: var(--color-ink-400);
+        --text-inverse: #ffffff;
+
+        --accent: var(--color-brand-600);
+        --accent-hover: var(--color-brand-700);
+        --accent-soft: var(--color-brand-50);
+        --accent-soft-text: var(--color-brand-700);
+        --accent-ring: color-mix(in oklab, var(--accent) 35%, transparent);
+
+        color-scheme: light;
+    }
+
+    .dark {
+        --surface-canvas: var(--color-ink-950);
+        --surface-panel: var(--color-ink-900);
+        --surface-raised: var(--color-ink-800);
+        --surface-sunken: #0b0d12;
+        --surface-hover: color-mix(in oklab, var(--color-ink-800) 70%, transparent);
+        --surface-active: var(--color-ink-800);
+        --surface-inverse: var(--color-ink-100);
+
+        --line-subtle: color-mix(in oklab, var(--color-ink-700) 55%, transparent);
+        --line-DEFAULT: var(--color-ink-800);
+        --line-strong: var(--color-ink-700);
+
+        --text-strong: var(--color-ink-50);
+        --text-DEFAULT: var(--color-ink-200);
+        --text-muted: var(--color-ink-400);
+        --text-subtle: var(--color-ink-500);
+        --text-inverse: var(--color-ink-950);
+
+        --accent: var(--color-brand-400);
+        --accent-hover: var(--color-brand-300);
+        --accent-soft: color-mix(in oklab, var(--color-brand-500) 16%, transparent);
+        --accent-soft-text: var(--color-brand-200);
+
+        color-scheme: dark;
+    }
+
+    * {
+        border-color: var(--line-subtle);
+    }
+
+    html {
+        -webkit-text-size-adjust: 100%;
+        scrollbar-gutter: stable;
+    }
+
+    body {
+        background-color: var(--surface-canvas);
+        color: var(--text-DEFAULT);
+        font-family: var(--font-sans);
+        font-feature-settings: 'cv11', 'ss01';
+        font-variation-settings: 'opsz' 32;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    /*
+       Both values are read from variables rather than written literally so the Arabic
+       block near the bottom of this file can reach them the same way it reaches every
+       Tailwind utility: by redefining the variable on the root element, not by
+       out-specifying the rule.
+    */
+    h1, h2, h3, h4, h5, h6 {
+        color: var(--text-strong);
+        letter-spacing: var(--tracking-headings);
+        font-weight: var(--font-weight-semibold);
+    }
+
+    :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: var(--radius-sm);
+    }
+
+    ::selection {
+        background-color: color-mix(in oklab, var(--accent) 24%, transparent);
+    }
+
+    [hidden] {
+        display: none !important;
+    }
+
+    /*
+       Alpine strips this attribute once it has initialised. Without the rule, every
+       cloaked element in the shell — the drawer, every modal, the command palette, the
+       collapsed-sidebar labels — paints for one frame before Alpine hides it.
+    */
+    [x-cloak] {
+        display: none !important;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   Utilities bound to the semantic tokens.
+   --------------------------------------------------------------------------- */
+@utility surface {
+    background-color: var(--surface-panel);
+}
+@utility surface-canvas {
+    background-color: var(--surface-canvas);
+}
+@utility surface-sunken {
+    background-color: var(--surface-sunken);
+}
+@utility surface-raised {
+    background-color: var(--surface-raised);
+}
+@utility text-strong {
+    color: var(--text-strong);
+}
+@utility text-muted {
+    color: var(--text-muted);
+}
+@utility text-subtle {
+    color: var(--text-subtle);
+}
+@utility border-subtle {
+    border-color: var(--line-subtle);
+}
+@utility border-strong {
+    border-color: var(--line-strong);
+}
+@utility ring-accent {
+    --tw-ring-color: var(--accent-ring);
+}
+@utility text-accent {
+    color: var(--accent);
+}
+@utility bg-accent {
+    background-color: var(--accent);
+}
+@utility bg-accent-soft {
+    background-color: var(--accent-soft);
+}
+
+/* ---------------------------------------------------------------------------
+   Direction.
+
+   Almost all of the work is in the markup: ms/me, ps/pe, start/end, border-s/border-e,
+   rounded-s/rounded-e, text-start/text-end. Those need nothing here. What is left is the
+   handful of cases a logical property cannot reach — a transform, a transform-origin, a
+   glyph that has to be mirrored — plus the two logical utilities Tailwind does not ship.
+   Deliberately short: every rule below is one that could not have been a class.
+   --------------------------------------------------------------------------- */
+
+/* The sign of the inline axis, so one declaration can serve both directions. */
+:root {
+    --flow: 1;
+}
+[dir='rtl'] {
+    --flow: -1;
+}
+
+/*
+   Panels that enter from an inline edge: the task drawer, the AI panel, the mobile
+   sidebar. Alpine swaps these as whole class names between transition states, so the
+   value has to be a class rather than a variant of one.
+*/
+@utility slide-from-start {
+    translate: -100% 0;
+}
+@utility slide-from-end {
+    translate: 100% 0;
+}
+[dir='rtl'] .slide-from-start {
+    translate: 100% 0;
+}
+[dir='rtl'] .slide-from-end {
+    translate: -100% 0;
+}
+
+/*
+   Tailwind has logical inset, margin, padding, border and radius utilities but no logical
+   transform-origin, and a menu that grows out of the wrong corner reads as a glitch. Only
+   the two corners Planvio opens menus from are defined.
+*/
+@utility origin-top-start {
+    transform-origin: top left;
+}
+@utility origin-top-end {
+    transform-origin: top right;
+}
+[dir='rtl'] .origin-top-start {
+    transform-origin: top right;
+}
+[dir='rtl'] .origin-top-end {
+    transform-origin: top left;
+}
+
+/*
+   A glyph that means "onward along the line" — next page, drill in, collapse toward the
+   edge — has to mirror. A chevron that means "open downward" must not, which is why this
+   is applied by hand at each site instead of to every chevron in the icon set.
+
+   `transform` is the last step of the transform chain, so a `rotate-*` on the same element
+   is applied after the mirror — which turns a disclosure chevron's 90 degrees into 270.
+   Where the glyph also rotates, this goes on the parent instead, and the rotation then
+   composes inside the mirrored frame rather than against it.
+*/
+@utility flip-rtl {
+    transform: scaleX(var(--flow));
+}
+
+/*
+   A chart is a coordinate space, not a paragraph, so it is pinned to one.
+
+   Every x in these SVGs is measured from the left of the viewBox. Letting an inherited
+   `rtl` reach the plot would not move any of them; it would only change what
+   `text-anchor="end"` means, anchoring each axis label on the far side of its own text
+   while the bars stayed put and painted over it. So the frame is fixed here — and in a
+   `dir="ltr"` on the element itself, because a direction that geometry depends on should
+   be visible in the markup and not only in a stylesheet — and the mirroring is then done
+   deliberately, in `components/chart/*`: each coordinate is reflected through the viewBox
+   on the way out, so an Arabic reader gets bars that grow from the right and a value axis
+   on the right rather than a chart read backwards.
+
+   What is *not* reflected is the text. Each label carries its own `direction`, which is
+   the page's for a category and `ltr` for a figure, and its anchor is resolved against
+   that. The heading, the legend, the tooltip and the accessible table are ordinary HTML
+   outside the SVG and follow the page as they always did.
+*/
+@utility plot-ltr {
+    direction: ltr;
+}
+
+/* Two pixels of movement along the reading direction, for hover affordances. */
+@utility nudge-inline {
+    translate: calc(0.125rem * var(--flow)) 0;
+}
+
+/*
+   A run that must not take part in the surrounding paragraph's ordering: a task key, an
+   identifier, a timestamp, a duration, a signed or suffixed number. Paired with dir="ltr"
+   by x-ui.bidi; on its own it isolates without asserting a direction.
+*/
+@utility bidi-isolate {
+    unicode-bidi: isolate;
+}
+
+/*
+   Text somebody typed, whose language we do not know.
+
+   `isolate` above stops a run from disturbing its neighbours but still lays it out in the
+   paragraph's direction. That is right for a task key and wrong for a sentence: an English
+   task title inside an Arabic page inherits dir=rtl, and when it wraps, its line boxes are
+   ordered right to left — so "Migrate the blog archive into the new CMS" reads as
+   "Migrate the blog" above "...archive into the new". Every character is present, in an
+   order nobody wrote.
+
+   `plaintext` is the CSS spelling of dir="auto": resolve each paragraph's direction from
+   its own first strong character. An English title goes LTR inside an Arabic page, an
+   Arabic title goes RTL inside an English one, and neither has to be marked up by hand at
+   thirty-one call sites.
+*/
+@utility bidi-auto {
+    unicode-bidi: plaintext;
+}
+
+@layer utilities {
+    /*
+       Truncation and line clamping are applied almost exclusively to user-authored strings
+       — task titles, project names, milestone names, comment excerpts — and truncation is
+       where the reordering becomes visible, because clipping happens at the INLINE end and
+       that end moves with direction. Making these bidi-aware by default fixes the whole
+       class of bug in one place; a UI label caught by it resolves to the direction its own
+       words already imply, which is the same direction it had before.
+    */
+    .truncate,
+    .line-clamp-1,
+    .line-clamp-2,
+    .line-clamp-3,
+    .line-clamp-4 {
+        unicode-bidi: plaintext;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   Arabic typography.
+
+   Everything above this point is about the inline axis. None of it is about the
+   script, and Arabic set at Latin metrics is wrong in three ways that mirroring
+   does not touch.
+
+   The hook is `:lang(ar)` rather than `[dir='rtl']` because direction and script are
+   different facts about a language. Hebrew reads right to left and is neither
+   cursive nor caseless: it wants every rule above and none of the three below.
+   `:lang()` matches on subtag boundaries, so `ar`, `ar-EG` and `ar-Arab-SA` all
+   match a rule written for `ar`, which is the correct reach for a statement about
+   the Arabic script.
+
+   All three are made by redefining the variables Tailwind's own utilities read,
+   on the root element, rather than by out-specifying those utilities. `text-sm`
+   compiles to `line-height: var(--tw-leading, var(--text-sm--line-height))`,
+   `tracking-wider` to `letter-spacing: var(--tracking-wider)` and `font-semibold`
+   to `font-weight: var(--font-weight-semibold)` — so one rule reaches all 145
+   tracked labels and every sized run in the product, is inherited by Livewire
+   fragments swapped in after load, costs a Latin install nothing, and never has to
+   win a specificity argument with a utility class.
+   --------------------------------------------------------------------------- */
+
+/*
+   The optical tightening a cased Latin face wants on a heading. Arabic is joined
+   rather than composed of separate letterforms, so there is nothing to tighten.
+*/
+:root {
+    --tracking-headings: -0.011em;
+}
+
+:root:lang(ar) {
+    /*
+       1. Leading.
+
+       Arabic has no x-height to sit on. The tall alef and lam run well past the
+       notional band and the tails of ya, jim and ayn run well below it, and vowel
+       marks are drawn above and below that again — so a line of Arabic occupies far
+       more vertical space than a line of Latin at the same font-size. At Latin's
+       1.5 the descenders of one line meet the marks of the next.
+
+       1.6–1.8 is the range that stops them touching. The display sizes take the low
+       end: a heading is one or two lines, and leading that reads as air inside a
+       paragraph reads as a gap between two lines of a title.
+    */
+    --text-2xs--line-height: 1.15rem; /* 0.6875rem · 1.67 */
+    --text-xs--line-height: 1.3rem; /*   0.75rem   · 1.73 */
+    --text-sm--line-height: 1.5rem; /*   0.875rem  · 1.71 */
+    --text-base--line-height: 1.7rem; /* 1rem      · 1.70 */
+    --text-lg--line-height: 1.85rem; /*  1.125rem  · 1.64 */
+    --text-xl--line-height: 2rem; /*     1.25rem   · 1.60 */
+    --text-2xl--line-height: 2.25rem; /* 1.5rem    · 1.50 */
+    --text-3xl--line-height: 2.6rem; /*  1.875rem  · 1.39 */
+
+    --leading-snug: 1.6; /*    from 1.375 */
+    --leading-normal: 1.7; /*  from 1.5   */
+    --leading-relaxed: 1.8; /* from 1.625 */
+
+    /* For everything with no `text-*` or `leading-*` class of its own. */
+    line-height: 1.7;
+
+    /*
+       2. Letter spacing.
+
+       Arabic is cursive: the letters of a word are joined, and letter-spacing is
+       applied to the joins. Tracking a word out does not open it up the way it does
+       a Latin word — it stretches the connecting strokes and pulls the word apart
+       into pieces, which is the single most visible way an interface says nobody
+       looked at it in this language.
+
+       Zero rather than `normal` because these feed `letter-spacing` directly and a
+       length is what that property is being given everywhere else.
+    */
+    --tracking-tighter: 0em;
+    --tracking-tight: 0em;
+    --tracking-wide: 0em;
+    --tracking-wider: 0em;
+    --tracking-widest: 0em;
+    --tracking-headings: 0em;
+
+    /*
+       3. Weight.
+
+       Noto Sans Arabic's axis is not Inter's. Arabic puts more ink on the line at
+       the same nominal weight — the strokes are largely horizontal, they join, and
+       the dots and marks add mass a Latin letter does not carry — so 600 beside
+       Inter's 600 reads as the bolder of the two rather than as the same emphasis.
+       Half a step down matches them. The axis is a real one (wght 100–900 in the
+       vendored file), so 550 is interpolated rather than synthesised.
+
+       `medium` is left alone: 500 is already the lightest weight that holds up at
+       the 11px label sizes this product uses a great many of.
+    */
+    --font-weight-semibold: 550;
+    --font-weight-bold: 650;
+}
+
+/*
+   Arabic has no letter case, so `text-transform: uppercase` on an Arabic label
+   changes nothing — but the label beside it may be a project name, a tag or a task
+   key somebody typed in English, and that one is shouted while its neighbours are
+   not. Neutralising the whole class is what keeps a row of section headers looking
+   like one row.
+
+   `uppercase-latin` below is the opt-out, for the runs that are Latin identifiers
+   whatever language the page is in.
+*/
+:lang(ar) .uppercase {
+    text-transform: none;
+}
+
+/*
+   `leading-none` compiles to a literal 1, so it is the one leading a variable cannot
+   reach. It is used on avatar initials, emoji tiles and big tabular figures, where
+   the point is a line box no taller than the glyph — which for Arabic clips the alef
+   above and the ya below. 1.15 is the smallest value that clears both.
+*/
+:lang(ar) .leading-none {
+    line-height: 1.15;
+}
+
+/* Long-form Arabic wants more than long-form Latin for the same reason. */
+:lang(ar) .prose-planvio {
+    line-height: 1.85;
+}
+
+/*
+   A currency code, a person's initials, a locale code: a run that is Latin whatever
+   the page language is, and is therefore still upper-cased on an Arabic page.
+*/
+@utility uppercase-latin {
+    text-transform: uppercase;
+}
+
+/* Thin, unobtrusive scrollbars. A dense product UI lives or dies on these. */
+@layer utilities {
+    .scrollbar-thin {
+        scrollbar-width: thin;
+        scrollbar-color: var(--line-strong) transparent;
+    }
+    .scrollbar-thin::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    .scrollbar-thin::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+        background-color: var(--line-strong);
+        border-radius: 9999px;
+        border: 2px solid transparent;
+        background-clip: content-box;
+    }
+
+    .no-scrollbar {
+        scrollbar-width: none;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    /* Kanban drag affordances driven by SortableJS classes. */
+    .sortable-ghost {
+        opacity: 0.4;
+    }
+    .sortable-drag {
+        box-shadow: var(--shadow-overlay);
+        transform: rotate(1.5deg);
+    }
+    .sortable-chosen {
+        cursor: grabbing;
+    }
+
+    .animate-in {
+        animation: planvio-in 160ms var(--ease-snap) both;
+    }
+    .animate-rise {
+        animation: planvio-rise 200ms var(--ease-snap) both;
+    }
+}
+
+@keyframes planvio-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+@keyframes planvio-rise {
+    from { opacity: 0; transform: translateY(6px) scale(0.985); }
+    to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   Anchored overlays: menus, tooltips and popovers.
+
+   The panel is put in the top layer with the Popover API so that no ancestor's
+   `overflow` or `z-index` can clip it, and `Alpine.data('anchored')` in
+   resources/js/app.js keeps it inside the window. What is left for CSS is the
+   part JavaScript should not be doing: undoing the user-agent's popover styling,
+   and animating a box that moves between `display: none` and `display: block`.
+
+   That animation needs two modern pieces. `transition-behavior: allow-discrete`
+   lets `display` and `overlay` participate in a transition instead of snapping,
+   and `@starting-style` supplies the "before it existed" values — without it the
+   panel has no state to animate *from* on open. Browsers that support neither
+   simply show and hide the panel, which is correct, just abrupt.
+   --------------------------------------------------------------------------- */
+@layer components {
+    .pv-overlay {
+        /* The UA gives a popover a border, padding, a background and `inset: 0`
+           with `margin: auto`. All of it has to go: the component supplies its
+           own surface, and the insets fight the measured position. */
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        overflow: visible;
+        inset: auto;
+        max-width: none;
+        max-height: none;
+    }
+
+    .pv-overlay::backdrop {
+        background: transparent;
+    }
+
+    /* A menu long enough to be capped scrolls itself rather than the page. */
+    .pv-overlay > .pv-overlay-surface {
+        max-height: inherit;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    /* Closed state, and the state an opening panel animates out of. */
+    .pv-overlay,
+    .pv-overlay[data-open='false'] {
+        opacity: 0;
+        transform: scale(0.97);
+    }
+
+    .pv-overlay:popover-open,
+    .pv-overlay[data-open] {
+        opacity: 1;
+        transform: none;
+    }
+
+    @supports (transition-behavior: allow-discrete) {
+        .pv-overlay {
+            transition:
+                opacity 140ms cubic-bezier(0.32, 0.72, 0, 1),
+                transform 140ms cubic-bezier(0.32, 0.72, 0, 1),
+                overlay 140ms allow-discrete,
+                display 140ms allow-discrete;
+        }
+
+        @starting-style {
+            .pv-overlay:popover-open,
+            .pv-overlay[data-open] {
+                opacity: 0;
+                transform: scale(0.97);
+            }
+        }
+    }
+
+    /* Fallback for browsers without the Popover API: `fixed` still escapes every
+       scrolling ancestor, which is the clipping that actually bites. */
+    @supports not selector(:popover-open) {
+        .pv-overlay {
+            display: none;
+            position: fixed;
+            z-index: 60;
+        }
+        .pv-overlay[data-open] {
+            display: block;
+        }
+    }
+
+    /* Nothing in the product may push the page sideways. A stray wide element is
+       a bug, but it should not also break every other page it appears on. */
+    html,
+    body {
+        overflow-x: clip;
+    }
+
+    /* ----------------------------------------------------------------------
+       Loading placeholders.
+
+       A sweep of light travels along the block rather than the whole thing
+       pulsing, because a pulse reads as "broken" and a sweep reads as "busy".
+       `background-position` is animated, not `background-image`, so the whole
+       effect stays on the compositor.
+       ---------------------------------------------------------------------- */
+    .pv-skeleton {
+        background-color: var(--surface-sunken);
+        background-image: linear-gradient(
+            var(--flow-gradient, 90deg),
+            transparent 0%,
+            color-mix(in oklab, var(--text-subtle) 14%, transparent) 50%,
+            transparent 100%
+        );
+        background-size: 200% 100%;
+        background-repeat: no-repeat;
+        animation: pv-skeleton-sweep 1.4s ease-in-out infinite;
+    }
+
+    /* The sweep should travel with the reading direction, not against it. */
+    :dir(rtl) .pv-skeleton {
+        animation-direction: reverse;
+    }
+
+    @keyframes pv-skeleton-sweep {
+        from { background-position: -100% 0; }
+        to { background-position: 200% 0; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .pv-skeleton {
+            animation: none;
+            background-image: none;
+        }
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   Page width.
+
+   Every screen used to choose its own cap — 3xl, 4xl, 5xl, 6xl and 7xl were all
+   in use for pages that do the same kind of job — so the application appeared to
+   change width as you moved through it, and a project header capped at 1280px
+   sat above a board that ran the full width of the window.
+
+   There are now two answers and one token. `.page` is the working width: capped
+   only so that content does not stretch to illegibility on an ultrawide display,
+   which means it is effectively full width on any screen somebody actually works
+   at. `.page-prose` is for a form or a document, where a long line is harder to
+   read rather than more useful.
+   --------------------------------------------------------------------------- */
+@layer components {
+    .page {
+        --page-max: 120rem;
+
+        width: 100%;
+        max-width: var(--page-max);
+        margin-inline: auto;
+        padding-inline: 1rem;
+    }
+
+    @media (min-width: 640px) {
+        .page {
+            padding-inline: 1.5rem;
+        }
+    }
+
+    .page-prose {
+        --page-max: 60rem;
+    }
+
+    /* Opt back out, for a full-bleed surface that supplies its own gutters. */
+    .page-bleed {
+        --page-max: none;
+
+        padding-inline: 0;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   Prose for wiki pages, task descriptions and AI-authored content.
+   Scoped tight so it never leaks into application chrome.
+   --------------------------------------------------------------------------- */
+@layer components {
+    .prose-planvio {
+        color: var(--text-DEFAULT);
+        line-height: 1.7;
+
+        /* A measure, not a container width. Pages are wide now, and running body
+           text the whole way across one costs the reader the start of the next
+           line on every wrap. `ch` rather than `rem` so the cap follows the font
+           size wherever this is used — a task drawer, a wiki page, a report. */
+        max-width: 68ch;
+    }
+    .prose-planvio > * + * { margin-top: 0.9em; }
+    .prose-planvio h1 { font-size: 1.5rem; margin-top: 1.6em; }
+    .prose-planvio h2 { font-size: 1.25rem; margin-top: 1.5em; }
+    .prose-planvio h3 { font-size: 1.05rem; margin-top: 1.4em; }
+    .prose-planvio a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+    .prose-planvio ul { list-style: disc; padding-inline-start: 1.4em; }
+    .prose-planvio ol { list-style: decimal; padding-inline-start: 1.4em; }
+    .prose-planvio li + li { margin-top: 0.35em; }
+    .prose-planvio blockquote {
+        border-inline-start: 3px solid var(--line-strong);
+        padding-inline-start: 1em;
+        color: var(--text-muted);
+    }
+    .prose-planvio code {
+        font-family: var(--font-mono);
+        font-size: 0.875em;
+        background: var(--surface-sunken);
+        padding: 0.15em 0.35em;
+        border-radius: var(--radius-sm);
+    }
+    .prose-planvio pre {
+        background: var(--surface-sunken);
+        border: 1px solid var(--line-subtle);
+        border-radius: var(--radius-lg);
+        padding: 1em;
+        overflow-x: auto;
+    }
+    .prose-planvio pre code { background: none; padding: 0; }
+    /*
+       Code is not prose. Inside an Arabic paragraph the bidi algorithm reorders a path, a
+       JSON fragment or a shell line around its own punctuation, so what is read stops
+       being what was written. Isolating the run is the only thing that keeps them equal.
+    */
+    .prose-planvio pre,
+    .prose-planvio code {
+        direction: ltr;
+        unicode-bidi: isolate;
+        text-align: start;
+    }
+    .prose-planvio table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+    .prose-planvio th, .prose-planvio td {
+        border: 1px solid var(--line-subtle);
+        padding: 0.5em 0.75em;
+        text-align: start;
+    }
+    .prose-planvio th { background: var(--surface-sunken); font-weight: 600; }
+    .prose-planvio img { border-radius: var(--radius-lg); max-width: 100%; }
+    .prose-planvio hr { border-color: var(--line-subtle); margin: 2em 0; }
+}
+
+@media print {
+    .print\:hidden, nav, aside, .no-print { display: none !important; }
+    body { background: #fff; color: #000; }
+    .print-break { break-after: page; }
+}

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/hatemsweileh/planvio/discussions
+    about: Ask how something works, share what you built, or propose an idea before opening an issue.
+  - name: Security vulnerability
+    url: https://github.com/hatemsweileh/planvio/security
+    about: Report privately. Please do not open a public issue for a security problem.
+  - name: Documentation
+    url: https://github.com/hatemsweileh/planvio/tree/main/docs
+    about: Installation, cPanel, cron, queues, the API, the AI layer and its security model.

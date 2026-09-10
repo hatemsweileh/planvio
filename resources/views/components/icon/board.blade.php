@@ -1,0 +1,1 @@
+<svg {{ $attributes->merge(["class" => "size-4"]) }} viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.8" y="3.5" width="4.4" height="13" rx="1.2"/><rect x="8.8" y="3.5" width="4.4" height="9" rx="1.2"/><rect x="14.8" y="3.5" width="2.4" height="6" rx="1.2"/></svg>

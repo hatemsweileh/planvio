@@ -1,0 +1,44 @@
+version: 2
+
+updates:
+  # Planvio has no in-app dependency updater by design: a web application that can fetch and
+  # execute new code over the network is a supply-chain risk in a product whose premise is
+  # that you host it yourself. So patching happens here, in the open, and reaches people as
+  # a release.
+  - package-ecosystem: composer
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, php]
+    groups:
+      # One pull request per framework family. Laravel, Filament and Livewire release in
+      # lockstep often enough that separate bumps just conflict with each other.
+      laravel:
+        patterns: ['laravel/*', 'illuminate/*']
+      filament:
+        patterns: ['filament/*']
+      livewire:
+        patterns: ['livewire/*']
+      symfony:
+        patterns: ['symfony/*']
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, javascript]
+    groups:
+      tiptap:
+        patterns: ['@tiptap/*']
+      tailwind:
+        patterns: ['tailwindcss', '@tailwindcss/*']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels: [dependencies, ci]

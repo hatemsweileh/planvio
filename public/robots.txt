@@ -1,0 +1,9 @@
+# Planvio is a private, authenticated workspace. Nothing behind the sign-in page
+# should ever be indexed.
+User-agent: *
+Disallow: /w/
+Disallow: /admin
+Disallow: /install
+Disallow: /api/
+Disallow: /attachments/
+Allow: /$

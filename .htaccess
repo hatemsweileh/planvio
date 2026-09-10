@@ -1,0 +1,84 @@
+# =============================================================================
+# Planvio - root hardening and public_html fallback
+#
+# This file matters in two situations:
+#
+#  1. Your domain's document root points at Planvio's `public/` directory (the
+#     recommended layout). Then this file is not web-reachable at all and simply
+#     costs nothing - it is defence in depth in case the document root is ever
+#     changed by mistake.
+#
+#  2. Your host forces the document root to be `public_html` and you extracted
+#     Planvio directly into it. Then this file does two jobs: it blocks access
+#     to everything that must never be served, and it forwards real requests
+#     into `public/`.
+#
+# Works with Apache and LiteSpeed. Do not delete it.
+# =============================================================================
+
+Options -Indexes -MultiViews
+
+# -----------------------------------------------------------------------------
+# Never serve application internals.
+# -----------------------------------------------------------------------------
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Environment files, keys, logs, database dumps, archives and VCS metadata.
+    RewriteRule (^|/)\.(env|git|svn|hg|htpasswd|DS_Store|idea|vscode) - [F,L,NC]
+    RewriteRule \.(env\..*|log|sqlite|sqlite3|db|sql|bak|swp|dist|lock|ini|yml|yaml|neon)$ - [F,L,NC]
+
+    # Framework and vendor directories.
+    RewriteRule ^(app|bootstrap|config|database|lang|resources|routes|storage|tests|vendor|node_modules|docs)(/|$) - [F,L]
+
+    # Composer, npm and tooling manifests.
+    RewriteRule ^(artisan|composer\.(json|lock|phar)|package(-lock)?\.json|phpunit\.xml|vite\.config\.js|pint\.json|README\.md|CLAUDE\.md|AGENTS\.md)$ - [F,L,NC]
+</IfModule>
+
+<IfModule !mod_rewrite.c>
+    <FilesMatch "^\.|\.(env|log|sqlite|sql|bak|lock|json|xml|md|yml|yaml)$">
+        Require all denied
+    </FilesMatch>
+</IfModule>
+
+# Belt and braces for hosts where mod_rewrite is unavailable or overridden.
+<FilesMatch "^(\.env|\.env\..*|composer\.(json|lock)|package(-lock)?\.json|artisan|phpunit\.xml)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# -----------------------------------------------------------------------------
+# public_html fallback: forward everything else into public/.
+#
+# If your document root already points at public/, these rules never match and
+# have no effect.
+# -----------------------------------------------------------------------------
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Already inside public/: leave it alone.
+    RewriteCond %{REQUEST_URI} ^/public/ [OR]
+    RewriteCond %{REQUEST_URI} ^/build/
+    RewriteRule ^ - [L]
+
+    # Serve an existing file from public/ (assets, favicon, robots.txt).
+    RewriteCond %{DOCUMENT_ROOT}/public%{REQUEST_URI} -f
+    RewriteRule ^(.*)$ public/$1 [L]
+
+    # Everything else goes to the front controller.
+    RewriteCond %{DOCUMENT_ROOT}/public/index.php -f
+    RewriteCond %{REQUEST_URI} !^/public/index\.php$
+    RewriteRule ^(.*)$ public/index.php [L]
+</IfModule>
+
+# -----------------------------------------------------------------------------
+# NOTE: PHP execution is disabled per-directory by the .htaccess files shipped
+# inside app/, config/, storage/, vendor/ and friends - deliberately NOT here.
+# An `php_flag engine off` at this level would cascade into public/ and stop the
+# application from running at all under the public_html layout.
+# -----------------------------------------------------------------------------

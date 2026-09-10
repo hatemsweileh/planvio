@@ -1,0 +1,67 @@
+name: Feature request
+description: Suggest something Planvio should be able to do
+labels: [enhancement, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Planvio has deliberate boundaries rather than accidental ones. Before suggesting a
+        feature, it is worth a look at
+        [docs/LIMITATIONS.md](https://github.com/hatemsweileh/planvio/blob/main/docs/LIMITATIONS.md)
+        — several obvious-seeming features are absent because they need a persistent daemon,
+        and Planvio targets shared hosting where there is not one.
+
+        That is not a reason not to ask. It is a reason to say what problem you are solving,
+        so a version that fits the constraints can be found.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: The situation, not the solution. This is the part that matters most.
+      placeholder: |
+        Our clients need to see progress on their project without us exporting a report
+        every Friday, but I do not want to give them a workspace login.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like Planvio to do?
+      placeholder: A read-only project link that can be shared with someone outside the workspace.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What have you tried instead?
+      description: Existing features that nearly work, or workarounds you are living with.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of Planvio?
+      multiple: true
+      options:
+        - Projects and tasks
+        - Board, list, calendar or timeline
+        - AI
+        - Reports and time tracking
+        - Wiki and files
+        - Teams, roles and permissions
+        - Administration and installer
+        - API or webhooks
+        - Languages and right-to-left
+        - Something else
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints
+      options:
+        - label: I understand this must work without Docker, Redis, a daemon, or Node in production
+        - label: I would be willing to work on this

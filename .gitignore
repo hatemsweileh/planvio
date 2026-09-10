@@ -1,0 +1,97 @@
+# ---------------------------------------------------------------------------
+# Dependencies — restored by `composer install` and `npm install`.
+# ---------------------------------------------------------------------------
+/vendor
+/node_modules
+
+# ---------------------------------------------------------------------------
+# Compiled frontend output.
+#
+# Not committed: `npm run build` regenerates it, and a committed bundle turns
+# every UI change into a binary conflict. The release ZIP contains it because
+# production must run with no Node — scripts/build-release.php builds it as
+# part of packaging.
+# ---------------------------------------------------------------------------
+/public/build
+/public/hot
+
+# Published by `php artisan filament:install`, not authored here.
+/public/css/filament
+/public/js/filament
+/public/fonts/filament
+/public/fonts-manifest.dev.json
+
+# Created by `php artisan storage:link`.
+/public/storage
+
+# Rendered design-system and localisation QA output. The source views are
+# committed; what they render is not.
+/public/_*
+
+# ---------------------------------------------------------------------------
+# Environment and secrets. Never commit any of these.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+auth.json
+/storage/*.key
+/storage/app/planvio-installed.lock
+
+# ---------------------------------------------------------------------------
+# Local databases and runtime state.
+# ---------------------------------------------------------------------------
+*.sqlite
+*.sqlite-journal
+/database/*.sqlite
+/storage/pail
+/storage/debugbar
+
+# ---------------------------------------------------------------------------
+# Build and release artefacts — produced by scripts/build-release.php.
+#
+# /github is a staged copy of this repository with its own git history, used
+# when preparing a publish. It must never be committed *into* the repository
+# it is a copy of.
+# ---------------------------------------------------------------------------
+/build
+/dist
+/github
+/scratchpad
+
+# ---------------------------------------------------------------------------
+# Local toolchain shims.
+#
+# Some contributors keep a `./php` or `./composer` wrapper pointing at a
+# specific binary on their own machine. Useful locally, meaningless to anyone
+# else, and actively broken on another operating system.
+# ---------------------------------------------------------------------------
+/php
+/composer
+/php.bat
+/composer.bat
+
+# ---------------------------------------------------------------------------
+# Editors, tooling and operating systems.
+# ---------------------------------------------------------------------------
+/.idea
+/.vscode
+/.zed
+/.nova
+/.fleet
+/.cursor
+/.codex
+/.claude
+.phpactor.json
+_ide_helper.php
+_ide_helper_models.php
+.phpstorm.meta.php
+/.phpunit.cache
+.phpunit.result.cache
+*.log
+.DS_Store
+Thumbs.db
+Homestead.json
+Homestead.yaml
+npm-debug.log
+yarn-error.log

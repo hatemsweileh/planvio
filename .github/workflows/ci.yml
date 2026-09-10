@@ -1,0 +1,164 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests · PHP ${{ matrix.php }} · ${{ matrix.database }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.3', '8.4']
+        database: [sqlite]
+        include:
+          # Planvio ships against MySQL in production but the suite runs on SQLite for
+          # speed. The two disagree about index name length, nullable uniques and a few
+          # column types, so one matrix leg exercises the real target.
+          - php: '8.4'
+            database: mariadb
+
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: planvio
+          MARIADB_DATABASE: planvio_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: bcmath, ctype, curl, fileinfo, gd, intl, json, mbstring, openssl, pdo, pdo_mysql, pdo_sqlite, tokenizer, xml, zip
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ matrix.php }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ matrix.php }}-
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Run the test suite
+        if: matrix.database == 'sqlite'
+        run: php artisan test
+
+      - name: Run migrations against MariaDB
+        if: matrix.database == 'mariadb'
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: planvio_test
+          DB_USERNAME: root
+          DB_PASSWORD: planvio
+        run: |
+          php artisan migrate:fresh --seed --force
+          php artisan migrate:rollback --force
+          php artisan migrate --force
+
+  style:
+    name: Code style
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+
+      - run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Pint
+        run: php vendor/bin/pint --test
+
+  assets:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Fail if a Tailwind class was lost
+        # A class assembled by interpolation compiles to nothing at all, silently. These
+        # are load-bearing utilities: if any is missing, the build succeeded and the UI
+        # did not.
+        run: |
+          CSS=$(find public/build/assets -name '*.css' | head -1)
+          echo "Checking $CSS"
+          for class in "ms-2" "me-2" "ps-3" "pe-3" "border-s" "border-e" "text-start" "text-end"; do
+            grep -q -- "$class" "$CSS" || { echo "::error::missing utility: $class"; exit 1; }
+          done
+          grep -q "noto-sans-arabic" "$CSS" || { echo "::error::Arabic font face missing"; exit 1; }
+          echo "All checked utilities present."
+
+  localisation:
+    name: Translation integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, intl
+          coverage: none
+
+      - name: Every English key has an Arabic value, with its placeholders intact
+        run: |
+          php -r '
+            $en = json_decode(file_get_contents("lang/en.json"), true) ?: [];
+            $ar = json_decode(file_get_contents("lang/ar.json"), true) ?: [];
+            $missing = array_keys(array_diff_key($en, $ar));
+            $broken = [];
+            foreach ($ar as $key => $value) {
+                preg_match_all("/:[a-zA-Z_]+/", (string) $key, $a);
+                preg_match_all("/:[a-zA-Z_]+/", (string) $value, $b);
+                if (array_diff($a[0], $b[0])) { $broken[] = $key; }
+            }
+            printf("en %d keys, ar %d keys\n", count($en), count($ar));
+            if ($missing) { printf("::error::%d untranslated: %s\n", count($missing), implode(" | ", array_slice($missing, 0, 5))); }
+            if ($broken) { printf("::error::%d lost a placeholder: %s\n", count($broken), implode(" | ", array_slice($broken, 0, 5))); }
+            exit($missing || $broken ? 1 : 0);
+          '

@@ -1,0 +1,15 @@
+{
+    "preset": "laravel",
+    "rules": {
+        "declare_strict_types": true,
+        "final_class": false,
+        "ordered_imports": { "sort_algorithm": "alpha" },
+        "no_unused_imports": true,
+        "not_operator_with_successor_space": true,
+        "trailing_comma_in_multiline": { "elements": ["arrays", "arguments", "parameters"] },
+        "phpdoc_align": { "align": "left" },
+        "single_trait_insert_per_statement": true,
+        "nullable_type_declaration_for_default_null_value": true
+    },
+    "exclude": ["vendor", "node_modules", "storage", "bootstrap/cache", "build", "dist"]
+}
