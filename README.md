@@ -24,6 +24,11 @@
   <img src="docs/screenshots/dashboard-dark.png#gh-dark-mode-only" alt="The Planvio dashboard in dark mode" width="900">
 </p>
 
+<p align="center">
+  <strong><a href="https://planvio.hatemswaileh.com">Try the live demo →</a></strong><br>
+  <code>admin@planvio.test</code> · <code>PlanvioDemo123</code>
+</p>
+
 ---
 
 ## What Planvio is
@@ -71,8 +76,40 @@ and vLLM. Nothing is sent anywhere you did not configure.
 
 ## A look at it
 
-Every screenshot below is the demo workspace `php artisan planvio:demo` installs, so you
-can have the same thing in front of you in about a minute.
+There is a live demo at **[planvio.hatemswaileh.com](https://planvio.hatemswaileh.com)**,
+and everything below is a screenshot of it. It is the same workspace
+`php artisan planvio:demo` installs, so you can also have it on your own machine in about a
+minute:
+
+```bash
+php artisan planvio:demo
+```
+
+Three accounts, one per role — because much of what Planvio does is only visible from a
+particular seat: what a Member can see, what a Manager can change, what an Owner is trusted
+with. They work on the live demo and on your own install alike.
+
+| Role | Name | Email | Password |
+|---|---|---|---|
+| Owner · platform admin | Dana Whitfield | `admin@planvio.test` | `PlanvioDemo123` |
+| Manager | Marcus Reyes | `manager@planvio.test` | `PlanvioDemo123` |
+| Member | Priya Nadar | `member@planvio.test` | `PlanvioDemo123` |
+
+The live demo is shared and public: anyone reading this can sign in and change anything in
+it, so treat whatever you find there as somebody else's experiment rather than as a fault.
+
+The workspace is three weeks into its life rather than a screenshot: work is finished, in
+flight, blocked and overdue at the same time, one project is behind and says why, time is
+logged against real tasks and one timer is still running. A demo where every bar is green
+teaches nobody what the product does on a bad Tuesday.
+
+These are demo credentials on a workspace full of invented data. Take it back out before
+using an installation for real work — the removal is exact, because the seeder records
+what it created and deletes precisely that:
+
+```bash
+php artisan planvio:demo --remove
+```
 
 ### A project
 
