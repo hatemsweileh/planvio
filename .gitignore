@@ -71,6 +71,18 @@ auth.json
 /*.local.php
 
 # ---------------------------------------------------------------------------
+# A clone of the wiki, if you happen to make one here.
+#
+# GitHub wikis are a separate repository — planvio.wiki.git — with their own
+# history. Cloning one inside this checkout and then committing it puts a second
+# copy of the documentation in a repository that does not own it: two copies
+# drift the moment somebody edits a page through the wiki interface, and the
+# copy nobody is editing is the one people read.
+# ---------------------------------------------------------------------------
+/planvio-wiki/
+/planvio.wiki/
+
+# ---------------------------------------------------------------------------
 # Local toolchain shims.
 #
 # Some contributors keep a `./php` or `./composer` wrapper pointing at a
