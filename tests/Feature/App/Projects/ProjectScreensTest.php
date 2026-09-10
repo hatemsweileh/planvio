@@ -130,6 +130,7 @@ final class ProjectScreensTest extends TestCase
             ->call('startBlank')
             ->set('name', 'Marketing Site')
             ->assertSet('key', 'MS')
+            ->set('color', '#3F66B0')
             ->set('targetDate', now()->addMonth()->toDateString())
             ->call('save')
             ->assertHasNoErrors();
@@ -188,6 +189,7 @@ final class ProjectScreensTest extends TestCase
             ->test(ProjectCreate::class, ['workspace' => $this->workspace])
             ->call('startBlank')
             ->set('name', 'Team Project')
+            ->set('color', '#3F66B0')
             ->call('toggleMember', $colleague->getKey())
             ->call('save')
             ->assertHasNoErrors();
@@ -224,7 +226,7 @@ final class ProjectScreensTest extends TestCase
         $other = $this->makeWorkspace(['slug' => 'northwind']);
         $foreign = $this->makeProject($other);
 
-        Livewire::actingAs($this->member)
+        $this->actingAs($this->member)
             ->test(ProjectIndex::class, ['workspace' => $this->workspace])
             ->call('toggleFavouriteFor', $foreign->getKey())
             ->assertStatus(404);
