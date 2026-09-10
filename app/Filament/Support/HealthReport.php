@@ -56,6 +56,7 @@ final class HealthReport
             $this->scheduler(),
             $this->ai(),
             $this->environmentFile(),
+            $this->compiledAssets(),
         ];
     }
 
@@ -552,6 +553,135 @@ final class HealthReport
             $label,
             __('The web server refuses to serve it.'),
             [__('GET :url returned :status.', ['url' => $url, 'status' => $status])],
+        );
+    }
+
+    /**
+     * The compiled stylesheet and script, checked on disk *and* over HTTP.
+     *
+     * Both halves are needed, and the second is the one that earns its place. A tree where
+     * `public/build` exists and PHP can read it produces a page that renders, links its
+     * stylesheet, and arrives unstyled — because the web server serves static files as
+     * itself rather than as the account, and a directory the account can read is not
+     * necessarily one the server can. LiteSpeed answers that with 404 rather than 403, so
+     * the symptom is a missing file that is demonstrably present, and the page gives no
+     * clue: the HTML is correct, the URL in it is correct, and the file is there.
+     *
+     * Checking the disk alone would report green in exactly that case. So the disk answers
+     * "was it built and uploaded", the request answers "can anybody actually fetch it",
+     * and only the pair means anything.
+     */
+    private function compiledAssets(): HealthCheck
+    {
+        $label = __('Compiled assets');
+        $manifestPath = public_path('build/manifest.json');
+
+        if (! is_file($manifestPath)) {
+            return HealthCheck::failed(
+                'assets',
+                $label,
+                __('The build manifest is missing, so the interface has no stylesheet.'),
+                [__('Looked for :path', ['path' => 'public/build/manifest.json'])],
+                __('The release ZIP ships public/build already compiled. If you installed from a git clone instead, that directory is deliberately not in the repository — run `npm install && npm run build` somewhere with Node and upload the result.'),
+            );
+        }
+
+        $manifest = json_decode((string) file_get_contents($manifestPath), true);
+
+        if (! is_array($manifest) || $manifest === []) {
+            return HealthCheck::failed(
+                'assets',
+                $label,
+                __('The build manifest could not be read.'),
+                [__('Looked for :path', ['path' => 'public/build/manifest.json'])],
+                __('Re-upload public/build from the release ZIP; the file is likely truncated.'),
+            );
+        }
+
+        // The entries the layout actually asks for, rather than every chunk in the build.
+        $files = [];
+
+        foreach ($manifest as $entry) {
+            if (is_array($entry) && ($entry['isEntry'] ?? false) === true && is_string($entry['file'] ?? null)) {
+                $files[] = $entry['file'];
+            }
+        }
+
+        if ($files === []) {
+            $first = reset($manifest);
+            if (is_array($first) && is_string($first['file'] ?? null)) {
+                $files[] = $first['file'];
+            }
+        }
+
+        $missing = array_values(array_filter(
+            $files,
+            static fn (string $file): bool => ! is_file(public_path('build/'.$file)),
+        ));
+
+        if ($missing !== []) {
+            return HealthCheck::failed(
+                'assets',
+                $label,
+                __('The manifest names files that are not on disk.'),
+                array_map(static fn (string $file): string => __('Missing :path', ['path' => 'public/build/'.$file]), $missing),
+                __('The upload was incomplete. Re-upload public/build from the release ZIP in full.'),
+            );
+        }
+
+        $base = rtrim((string) config('app.url'), '/');
+
+        if ($base === '' || $files === []) {
+            return HealthCheck::warning(
+                'assets',
+                $label,
+                __('Present on disk, but reachability could not be checked.'),
+                [__('Set APP_URL to check that the web server serves them.')],
+                __('Set APP_URL to the address this installation is served from.'),
+            );
+        }
+
+        $url = $base.'/build/'.$files[0];
+
+        try {
+            $response = Http::withoutVerifying()
+                ->withOptions(['allow_redirects' => false])
+                ->connectTimeout(3)
+                ->timeout(5)
+                ->get($url);
+
+            $status = $response->status();
+        } catch (Throwable $exception) {
+            return HealthCheck::warning(
+                'assets',
+                $label,
+                __('Present on disk, but this installation could not reach itself to confirm they are served.'),
+                [__('Requested :url', ['url' => $url]), $this->safeMessage($exception)],
+                __('Open :url in a browser. It should return the file, not a 404.', ['url' => $url]),
+            );
+        }
+
+        if ($status === 200) {
+            return HealthCheck::healthy(
+                'assets',
+                $label,
+                __('Built, uploaded and served.'),
+                [
+                    __('GET :url returned 200.', ['url' => $url]),
+                    trans_choice('{1}:count entry file in the manifest|[2,*]:count entry files in the manifest', count($files), ['count' => count($files)]),
+                ],
+            );
+        }
+
+        return HealthCheck::failed(
+            'assets',
+            $label,
+            __('The files are on disk but the web server will not serve them, so the interface loads unstyled.'),
+            [
+                __('GET :url returned :status.', ['url' => $url, 'status' => $status]),
+                __('The same file is readable by PHP at :path.', ['path' => 'public/build/'.$files[0]]),
+            ],
+            __('Try the same path with /public in front of it. If that returns the file, the document root is the project folder and the .htaccess forwarding into public/ is not covering /build — replace the .htaccess that ships with the release. If both fail, check that public/build is 755 for directories and 644 for files.'),
         );
     }
 

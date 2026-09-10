@@ -157,7 +157,15 @@ bootstrap/cache/
 To set them: right-click a folder → **Change Permissions** → tick the boxes for `755` →
 tick **Recurse into subdirectories** → **Change Permissions**.
 
-The installer verifies these and will tell you if anything is wrong.
+While you are here, `public/build/` should be `755` for directories and `644` for files.
+Static files are served by LiteSpeed or Apache as *themselves*, not as your cPanel account,
+so a directory extracted with restrictive permissions is one PHP can read and the web
+server cannot — and the symptom is a site that works perfectly and arrives with no styling.
+
+The installer verifies the writable directories above and will tell you if anything is
+wrong. **Admin → System Health** additionally fetches the compiled stylesheet over HTTP
+after installation, which is the only check that can tell "the file is there" apart from
+"anybody can actually load it" — the two come apart more often than you would expect.
 
 ---
 
@@ -362,7 +370,36 @@ deliberately, delete that file **and** drop the database tables — never one wi
 other.
 
 **Styles missing, page looks like plain text**
-The document root is pointing at the project folder instead of `public/`. Recheck Step 4.
+Two different faults produce exactly this page, and one URL tells them apart. Open
+`https://your-domain.com/img/brand/planvio-mark.svg`.
+
+*It 404s too* — the document root is pointing at the project folder instead of `public/`.
+Recheck Step 4.
+
+*It loads* — the document root is right, and only the compiled assets are missing. Take the
+address out of the page's own `<link rel="stylesheet">` (view source, or read it off
+**Admin → System Health**, which fetches it and prints what it got) and try it with
+`/public` inserted at the front:
+
+```
+https://your-domain.com/build/assets/app-XXXX.css          → 404
+https://your-domain.com/public/build/assets/app-XXXX.css   → 200
+```
+
+If it behaves like that, the files are fine and the `.htaccess` in the project root is not
+forwarding `/build/` into `public/`. Releases before this fix short-circuited every
+`/build/` request, which broke the stylesheet and nothing else — so the site worked
+perfectly and looked broken. Replace the root `.htaccess` with the one from the current
+release.
+
+If *both* return 404, then it is permissions after all: the web server reads static files
+as itself rather than as your cPanel account, and LiteSpeed reports a directory it cannot
+enter as 404 rather than 403. Set `public/build` to `755` for directories and `644` for
+files.
+
+If `public/build` is absent altogether, you installed from a git clone rather than the
+release ZIP. Compiled assets are deliberately not in the repository; the release archive
+ships them already built.
 
 **Scheduler and queue show as inactive**
 The PHP path in your cron command is wrong. Copy the exact command from
