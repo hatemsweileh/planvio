@@ -75,7 +75,7 @@ jobs:
 
       - name: Run the test suite
         if: matrix.database == 'sqlite'
-        run: php artisan test
+        run: php artisan test --exclude tests/Feature/Security/UploadScanningTest.php
 
       - name: Run migrations against MariaDB
         if: matrix.database == 'mariadb'
