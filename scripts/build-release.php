@@ -80,6 +80,9 @@ $excludeDirs = [
     // A working tree may hold a prepared copy of the public repository at ./github.
     // Staging it would put the whole source inside the release a second time.
     'github',
+    // Wiki pages belong to the separate planvio.wiki.git repository and are project
+    // furniture, not product: a customer extracting the ZIP has no wiki.
+    'wiki',
 ];
 
 $excludeFiles = [

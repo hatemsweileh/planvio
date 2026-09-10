@@ -1,0 +1,30 @@
+# The Sponsor button on the repository page.
+#
+# Every key below is optional and any that is blank or removed simply does not appear.
+# GitHub validates this file on push and will not show the button at all if it fails to
+# parse, so keep the shapes exactly as they are: `github` takes a list, everything else
+# takes a single username, and none of them take a full URL.
+#
+# `github: [hatemsweileh]` shows nothing until GitHub Sponsors is actually enabled on the
+# account — Settings → Sponsors, which needs identity and payout details. It is harmless
+# to leave in place before then, so the button appears the day the account is approved
+# rather than needing this file changed again.
+#
+# Planvio is AGPL-3.0. Sponsorship supports the work; it buys no licence exception, no
+# private support agreement and no influence over what gets merged. That is worth being
+# plain about in a project whose whole premise is that you own what you run.
+
+github: [hatemsweileh]
+
+# Uncomment and fill in whichever you actually use. A button pointing at an account that
+# does not exist is worse than no button.
+#
+# patreon: your-patreon-username        # username only, not the full URL
+# open_collective: planvio              # the collective's slug
+# ko_fi: your-ko-fi-username
+# buy_me_a_coffee: your-username
+# liberapay: your-liberapay-username
+# tidelift: packagist/hatemsweileh/planvio
+# polar: your-polar-username
+# thanks_dev: your-thanks-dev-username
+# custom: ['https://example.com/donate']   # a list, and the one field that does take URLs

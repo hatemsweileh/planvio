@@ -1032,6 +1032,67 @@ must not become a production dependency.
 
 ---
 
+## The wiki is a different repository
+
+`wiki/` in the working tree holds the GitHub wiki's pages. It is **not** part of the code
+repository — GitHub wikis live at `<repo>.wiki.git`, a separate repository with its own
+history — so both build scripts skip the directory and it never reaches either the public
+repo or the release ZIP.
+
+To publish a change to it:
+
+```bash
+git clone https://github.com/hatemsweileh/planvio.wiki.git /tmp/planvio-wiki
+cp wiki/*.md /tmp/planvio-wiki/
+cd /tmp/planvio-wiki && git add -A && git commit -m "Update wiki" && git push
+```
+
+The wiki has to be enabled once in **Settings → Features → Wikis** before that remote
+exists, and the first page has to be created through the web interface — GitHub does not
+create the wiki repository until there is something in it.
+
+What goes where matters more than it looks. `docs/` is versioned with the code, so a change
+in behaviour changes the doc in the same commit and the pair is always true together. The
+wiki is not versioned and anyone can edit it, which makes it right for what is learned after
+a release — a host with an odd PHP path, a symptom nobody predicted — and wrong for anything
+that must stay in step with a particular version. **If it would have to change when the code
+changes, it belongs in `docs/`.**
+
+---
+
+## Dependencies are resolved for PHP 8.3, whatever you are running
+
+`composer.json` pins the resolver's idea of the platform:
+
+```json
+"config": {
+    "platform": { "php": "8.3.0" }
+}
+```
+
+Without it, Composer resolves against *your* PHP, so a `composer update` run on 8.4
+happily selects packages that require 8.4 — Symfony 8 requires `>=8.4.1`, and Laravel 13
+accepts either Symfony 7 or 8. The lock file that came out of that machine then cannot be
+installed on 8.3 at all, while `composer.json` and the README both still promise it.
+
+For Planvio that is worse than an inconvenience, because **the release archive ships
+`vendor/`**. A customer on cPanel with PHP 8.3 selected does not run Composer and so never
+sees a resolution error; they get a prebuilt tree of 8.4-only code and a fatal error at
+runtime, on a host where they cannot fix it.
+
+So the lock is always resolved for the oldest PHP the product supports. Consequences worth
+knowing:
+
+- `composer update` on PHP 8.4 gives you the same versions it gives everyone else. That is
+  the point — the lock is a shared artefact, not a local one.
+- Composer will never select a package requiring 8.4+, even if you are on 8.4. To use one,
+  first raise `require.php` **and** this pin **and** the CI matrix **and** the README
+  together. Doing fewer than all four leaves the product claiming support it does not have.
+- `composer check-platform-reqs` reports against the PHP actually running, not against the
+  pin, so it cannot answer this question. `composer why-not php 8.3` can.
+
+---
+
 ## Building a release
 
 ```bash

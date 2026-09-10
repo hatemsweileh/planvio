@@ -1,0 +1,58 @@
+# How GitHub groups the notes it generates for a release.
+#
+# Used by the "Generate release notes" button, and by `gh release create --generate-notes`.
+# Without this file every merged pull request lands in one undifferentiated list, which for
+# a release of any size is a changelog nobody reads.
+#
+# This does not replace CHANGELOG.md. That file is written by hand and says what changed
+# and why it matters to somebody deciding whether to upgrade; this is the mechanical list
+# underneath it, and the two are for different readers.
+#
+# Categories are matched in order and each pull request lands in the first one that fits,
+# so the more specific labels have to come before `enhancement` and `bug`.
+
+changelog:
+  exclude:
+    labels:
+      - duplicate
+      - invalid
+      - wontfix
+      - question
+      - idea
+    authors:
+      - dependabot
+      - github-actions
+
+  categories:
+    - title: Breaking changes
+      labels: [breaking]
+
+    - title: Security
+      labels: [security]
+
+    - title: AI
+      labels: ["area: ai"]
+
+    - title: Languages and right-to-left
+      labels: ["area: i18n"]
+
+    - title: Installer and upgrades
+      labels: ["area: installer"]
+
+    - title: API and webhooks
+      labels: ["area: api"]
+
+    - title: New features and improvements
+      labels: [enhancement]
+
+    - title: Fixes
+      labels: [bug]
+
+    - title: Documentation
+      labels: [documentation]
+
+    # Anything merged without a label still has to appear, or the notes quietly under-report
+    # the release. A category that catches everything else makes the omission visible
+    # instead, which is a prompt to label it.
+    - title: Other changes
+      labels: ["*"]

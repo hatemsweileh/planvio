@@ -1,0 +1,61 @@
+title: "[Idea] "
+labels: [idea]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For a thought that is not yet a proposal.
+
+        The difference from a
+        [feature request](https://github.com/hatemsweileh/planvio/issues/new?template=feature_request.yml):
+        an issue is a thing somebody could pick up and build, and it invites the question
+        "is this in scope?" straight away. A discussion is for working out whether there is
+        a good version of the idea at all. Plenty of the best features start as a vague
+        complaint about a workflow, and that is a fine way to open one of these.
+
+        If it firms up into something concrete, it can be turned into an issue afterwards —
+        with the discussion linked, so the reasoning is not lost.
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: However rough. A sentence is enough to start.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: What makes you want it?
+      description: |
+        The situation that produced the thought. This is the part that survives even when
+        the specific idea does not — a real workflow problem is useful even if the proposed
+        solution turns out to be the wrong shape.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: shape
+    attributes:
+      label: Roughly what kind of change is it?
+      options:
+        - A small refinement to something that exists
+        - A new capability inside an existing area
+        - A new area of the product
+        - A change to how something already works
+        - Not sure
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+
+        One constraint that shapes every answer here, so it is worth saying up front rather
+        than in a reply: Planvio runs on shared hosting with **no daemon, no Redis, no Node
+        and no Composer in production**. Anything that needs a process that stays running is
+        not a small change, it is a different product. That does not make an idea unwelcome —
+        it usually just means the interesting question is what a cron-shaped version of it
+        would look like.

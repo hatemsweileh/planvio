@@ -1,0 +1,73 @@
+title: "[Q&A] "
+labels: [question]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Questions belong here rather than in Issues — an issue is a defect or a proposal,
+        and closing somebody's question as "not a bug" helps nobody.
+
+        Two things worth checking first, because they answer most of what arrives here:
+
+        - **[docs/](https://github.com/hatemsweileh/planvio/tree/main/docs)** — sixteen
+          guides, including the full [cPanel walkthrough](https://github.com/hatemsweileh/planvio/blob/main/docs/CPANEL.md)
+          and [CRON.md](https://github.com/hatemsweileh/planvio/blob/main/docs/CRON.md),
+          which between them cover most installation questions.
+        - **[docs/LIMITATIONS.md](https://github.com/hatemsweileh/planvio/blob/main/docs/LIMITATIONS.md)** —
+          what Planvio deliberately does not do. If the thing you are trying to make it do
+          is in there, the answer is there too, along with why.
+
+        **If this is a security problem, do not post it here.** Report it privately through
+        the [Security tab](https://github.com/hatemsweileh/planvio/security) instead.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: What is this about?
+      options:
+        - Installing or upgrading
+        - Cron, queues or the scheduler
+        - Email and notifications
+        - The AI layer
+        - Permissions, roles or guests
+        - Languages and right-to-left
+        - The REST API or webhooks
+        - Reports, time or budgets
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: What are you trying to do?
+      description: |
+        The goal, not only the step that is failing. Half the time there is a simpler route
+        to the same place, and it only becomes visible when the goal is stated.
+      placeholder: |
+        I want the two cron jobs running on a cPanel host where the PHP binary is not on
+        the default path, and I am not sure which path to give the scheduler.
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you tried?
+      description: Including anything from the docs that did not work, so nobody sends you back to it.
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        Skip this if the question is not about a specific installation. Otherwise most of it
+        is on **Admin → System Information** and can be pasted wholesale.
+
+        **Redact anything sensitive** — keys, passwords, tokens, real customer names.
+      placeholder: |
+        Planvio:   1.0.0
+        PHP:       8.3.14
+        Database:  MariaDB 10.11.6
+        Hosting:   cPanel shared (LiteSpeed)
+      render: text

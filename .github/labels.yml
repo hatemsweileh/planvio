@@ -1,0 +1,128 @@
+# The labels this repository's templates and workflows depend on.
+#
+# This is not decoration. GitHub **silently drops** a label an issue form asks for when the
+# label does not exist on the repository — the issue is created, the `labels:` line does
+# nothing, and no error is shown anywhere. A new repository ships only a handful of
+# defaults, so `needs-triage`, `ci`, `dependencies`, `php`, `javascript`, `question` and
+# `idea` all have to be created before the forms in this directory actually work.
+#
+# Apply them with the GitHub CLI, from a checkout of this repository:
+#
+#     bash .github/labels.sh
+#
+# It is safe to re-run: existing labels are updated rather than duplicated.
+#
+# Kept deliberately short. A label nobody filters by is a label that makes the list of
+# labels harder to read, which is the only thing it does.
+
+# --- What kind of thing is it -------------------------------------------------
+- name: bug
+  colour: "D73A4A"
+  description: Something does not work the way it should
+
+- name: enhancement
+  colour: "3F66B0"
+  description: A new capability or a refinement to an existing one
+
+- name: documentation
+  colour: "5B7FC7"
+  description: The docs are wrong, unclear or missing
+
+- name: security
+  colour: "B60205"
+  description: Handled privately first — see SECURITY.md
+
+- name: question
+  colour: "8B93A1"
+  description: A support question, usually from Discussions
+
+- name: idea
+  colour: "A6B4CC"
+  description: Early thinking, not yet a proposal
+
+# --- Where it is in triage ----------------------------------------------------
+- name: needs-triage
+  colour: "FBCA04"
+  description: Not yet read and sorted
+
+- name: needs-reproduction
+  colour: "E99695"
+  description: Cannot be acted on until somebody can make it happen again
+
+- name: confirmed
+  colour: "0E8A16"
+  description: Reproduced, and accepted as something to fix
+
+- name: blocked
+  colour: "6E5494"
+  description: Waiting on something outside this repository
+
+# GitHub creates these three on a new repository, so they are usually already present.
+# They are listed anyway because release.yml excludes them from generated release notes,
+# and an exclusion naming a label that does not exist silently excludes nothing.
+- name: duplicate
+  colour: "CFD3D7"
+  description: Already reported somewhere else
+
+- name: invalid
+  colour: "E4E669"
+  description: Not a defect, or not enough to act on
+
+- name: wontfix
+  colour: "DDDDDD"
+  description: A deliberate decision not to change this
+
+# --- Which part of the product ------------------------------------------------
+- name: "area: ai"
+  colour: "7B5EA7"
+  description: The AI layer, tools, approvals and automations
+
+- name: "area: i18n"
+  colour: "1D76DB"
+  description: Languages, translation and right-to-left
+
+- name: "area: installer"
+  colour: "C2A400"
+  description: The browser installer and upgrades
+
+- name: "area: api"
+  colour: "0B7285"
+  description: The REST API and webhooks
+
+- name: "area: ui"
+  colour: "3F66B0"
+  description: Views, layout, components and accessibility
+
+- name: "area: permissions"
+  colour: "9E5C00"
+  description: Roles, policies, tenancy and guest access
+
+# --- Housekeeping -------------------------------------------------------------
+- name: dependencies
+  colour: "0366D6"
+  description: Raised by Dependabot
+
+- name: php
+  colour: "777BB4"
+  description: PHP dependencies
+
+- name: javascript
+  colour: "F1E05A"
+  description: Frontend dependencies
+
+- name: ci
+  colour: "586069"
+  description: Continuous integration and workflows
+
+- name: breaking
+  colour: "B60205"
+  description: Requires action when upgrading
+
+# --- Invitations --------------------------------------------------------------
+- name: good first issue
+  colour: "7057FF"
+  description: Small, self-contained, and a reasonable first contribution
+
+- name: help wanted
+  colour: "008672"
+  description: Useful, and nobody is currently working on it
