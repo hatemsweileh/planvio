@@ -15,8 +15,13 @@
   <a href="https://github.com/hatemsweileh/planvio/releases"><img alt="Version" src="https://img.shields.io/badge/version-1.0.0-3F66B0"></a>
   <img alt="PHP" src="https://img.shields.io/badge/php-8.3%20%7C%208.4-777BB4">
   <img alt="Laravel" src="https://img.shields.io/badge/laravel-13-FF2D20">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-2%2C031%20passing-3FB07A">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-2%2C034%20passing-3FB07A">
   <img alt="Languages" src="https://img.shields.io/badge/languages-English%20%C2%B7%20%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9-3F66B0">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/dashboard.png#gh-light-mode-only" alt="The Planvio dashboard: work needing attention, the next fortnight, active projects and team workload" width="900">
+  <img src="docs/screenshots/dashboard-dark.png#gh-dark-mode-only" alt="The Planvio dashboard in dark mode" width="900">
 </p>
 
 ---
@@ -61,6 +66,64 @@ real authority and real limits.
 Bring your own model. Planvio talks to OpenAI, Anthropic, any OpenAI-compatible endpoint
 (Azure, OpenRouter, Groq, Together, Mistral) and local runtimes such as Ollama, LM Studio
 and vLLM. Nothing is sent anywhere you did not configure.
+
+---
+
+## A look at it
+
+Every screenshot below is the demo workspace `php artisan planvio:demo` installs, so you
+can have the same thing in front of you in about a minute.
+
+### A project
+
+Health is measured from the work — overdue tasks, delayed milestones, the target date — and
+a manager can override it. When the two disagree, the project says so rather than quietly
+preferring one: *health is pinned to "At risk" by hand; the measurements say "Off track"*.
+Anything the assistant writes is labelled **analysis, not a measurement**, in the same
+panel as the figures it is talking about.
+
+<p align="center">
+  <img src="docs/screenshots/project.png" alt="A project overview showing progress, milestones, a risk panel and the project team" width="900">
+</p>
+
+### Board
+
+Drag and drop across your own statuses. Keys, assignees, due dates, tags, priorities and
+subtask progress on the card, so the board answers most questions without opening anything.
+
+<p align="center">
+  <img src="docs/screenshots/board.png" alt="A Kanban board with Backlog, To Do, In Progress and Review columns" width="900">
+</p>
+
+### Timeline
+
+Dependencies as arrows, milestones as diamonds, a today marker, and four zoom levels.
+Overdue work is red on the bar rather than in a separate report you have to go and read.
+
+<p align="center">
+  <img src="docs/screenshots/timeline.png" alt="A Gantt timeline showing tasks, milestones and dependency arrows across August to October" width="900">
+</p>
+
+### Reports
+
+Progress, workload, timeline health, time and budget. Every chart carries a hidden data
+table with the same figures, so a screen reader gets the numbers rather than a description
+of a picture.
+
+<p align="center">
+  <img src="docs/screenshots/reports.png" alt="The reports screen showing delivery by project as a stacked bar chart and a project table" width="900">
+</p>
+
+### English and Arabic, properly
+
+Not a translated string file over a left-to-right layout. The whole interface mirrors: the
+sidebar moves to the right, the board runs right to left, chevrons and progress reverse,
+dates are written in Arabic — while a Latin task title or a key like `MKT-8` keeps its own
+direction inside the sentence it sits in.
+
+<p align="center">
+  <img src="docs/screenshots/arabic-board.png" alt="The same board rendered right to left in Arabic, with the sidebar on the right and columns running from right to left" width="900">
+</p>
 
 ---
 

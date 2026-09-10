@@ -255,9 +255,9 @@ a product whose whole premise is that you host it yourself.
 
 So the claims above are calibrated:
 
-- **2,031 automated tests**, 12,641 assertions, covering unit, feature, security,
+- **2,034 automated tests**, 12,652 assertions, covering unit, feature, security,
   localisation and installer suites. Five of them are browser-render reviews that skip
-  unless a review run asks for them, so an ordinary `php artisan test` reports 2,026 passed
+  unless a review run asks for them, so an ordinary `php artisan test` reports 2,029 passed
   and 5 skipped.
 - **Migrations run on both SQLite and MariaDB 10.11**, forward and rollback.
 - **The installer was walked end to end over HTTP** against a real MariaDB database — not
