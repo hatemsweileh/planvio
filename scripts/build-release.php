@@ -82,7 +82,7 @@ $excludeDirs = [
     'github',
     // Wiki pages belong to the separate planvio.wiki.git repository and are project
     // furniture, not product: a customer extracting the ZIP has no wiki.
-    'wiki',
+    'wiki', 'planvio-wiki', 'planvio.wiki',
 ];
 
 $excludeFiles = [
@@ -98,6 +98,11 @@ $excludeFiles = [
     // from a clone never sees them — but a release built from a development tree would,
     // and instructions written for a coding agent are not part of the product.
     'CLAUDE.md', 'AGENTS.md',
+    // One-off maintenance scripts, ignored by git for the same reason. The release is
+    // staged from the filesystem rather than from git, so .gitignore does not protect
+    // it: a demo-seeding script left in a working tree would otherwise land in the web
+    // root of every installation built from this ZIP.
+    'seed-demo.php',
 ];
 
 $copied = copyTree(ROOT, $stage, $excludeDirs, $excludeFiles);
@@ -307,6 +312,17 @@ function copyTree(string $from, string $to, array $excludeDirs, array $excludeFi
         /** @var SplFileInfo $item */
         $relative = str_replace('\\', '/', substr($item->getPathname(), strlen($from) + 1));
 
+        /*
+         * Links are skipped, not followed and not copied. The one a working tree usually has
+         * is public/storage, made by `storage:link` for a local instance: it points at an
+         * absolute path on this machine, means nothing on the server, and the installer
+         * creates the real one there. Copying it failed with a warning; following it would
+         * have packaged somebody's uploaded files.
+         */
+        if ($item->isLink()) {
+            continue;
+        }
+
         if ($item->isDir()) {
             mkdirp($to.'/'.$relative);
 
@@ -396,7 +412,11 @@ function trimVendor(string $vendor): int
     $dropFiles = ['.gitignore', '.gitattributes', '.travis.yml', 'phpunit.xml',
         'phpunit.xml.dist', '.php-cs-fixer.dist.php', 'psalm.xml', 'phpstan.neon',
         'phpstan.neon.dist', 'Makefile', 'CONTRIBUTING.md', 'CHANGELOG.md',
-        '.editorconfig', '.scrutinizer.yml', 'appveyor.yml'];
+        '.editorconfig', '.scrutinizer.yml', 'appveyor.yml',
+        // Working notes some packages now ship for coding assistants (Guzzle and Livewire
+        // among them). Development furniture like the rest of this list, and nothing a
+        // server running the application reads.
+        'AGENTS.md', 'CLAUDE.md', 'GEMINI.md', '.cursorrules'];
 
     $removed = 0;
 
