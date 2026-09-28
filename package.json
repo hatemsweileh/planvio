@@ -14,7 +14,7 @@
         "vite": "^8.0.0"
     },
     "optionalDependencies": {
-        "@laravel/multiplex": "^0.4.1"
+        "@laravel/multiplex": "^0.4.4"
     },
     "dependencies": {
         "@tiptap/core": "^3.31.3",
