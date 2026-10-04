@@ -89,7 +89,7 @@ First public release.
 
 - Requires PHP 8.3 or 8.4 and MySQL 5.7+ / MariaDB 10.6+.
 - Runs without Docker, Redis, Node, Composer, a daemon or root in production.
-- 2,031 automated tests. Migrations verified on SQLite and MariaDB. The installer is walked
+- 2,034 automated tests. Migrations verified on SQLite and MariaDB. The installer is walked
   end to end over HTTP against a real database as part of release verification.
 - Known boundaries are documented in [docs/LIMITATIONS.md](docs/LIMITATIONS.md) rather than
   left for you to discover.
