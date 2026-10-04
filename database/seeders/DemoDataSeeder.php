@@ -66,6 +66,25 @@ use RuntimeException;
  *
  * Everything is written inside one transaction and recorded in a settings row, so
  * `planvio:demo --remove` can take exactly this data back out and nothing else.
+ *
+ * # No factories here, deliberately
+ *
+ * Model factories look like the obvious tool and cannot be used. `fakerphp/faker` is a
+ * `require-dev` dependency, Laravel defines the `fake()` helper only
+ * `if (class_exists(\Faker\Factory::class))`, and every release ships `vendor/` built with
+ * `composer install --no-dev`. So on the installations this command exists to serve —
+ * a real one, on shared hosting, where the customer cannot run Composer — the helper is
+ * simply not defined and the first factory call is a fatal error.
+ *
+ * That is what made this worth fixing rather than documenting: the command is shipped, is
+ * advertised in the README, and has an explicit `--force` path for production, and it had
+ * never once been able to run there. The test suite could not see it, because tests run
+ * with dev dependencies present.
+ *
+ * Nothing was lost in the change. Every faker-generated value at these four call sites was
+ * already being overridden by the seeder — the demo's names, amounts and dates are all
+ * written by hand, because a demo assembled from random words teaches nobody anything.
+ * Faker was computing values that were thrown away.
  */
 final class DemoDataSeeder extends Seeder
 {
@@ -299,16 +318,35 @@ final class DemoDataSeeder extends Seeder
         $people = [];
 
         foreach (self::accounts() as $account) {
-            $people[$account['key']] = User::factory()->create([
+            $user = new User;
+
+            /*
+             | `forceFill` rather than `create`: `email_verified_at`, `remember_token`,
+             | `last_login_at` and `last_login_ip` are deliberately not mass-assignable,
+             | and `create()` would drop them without a word. Factories get away with the
+             | same attributes because `Factory::make()` wraps instantiation in
+             | `Model::unguarded()`; this says so out loud instead.
+             |
+             | The `hashed` cast still applies, so the password is stored hashed exactly
+             | as it was when this went through the factory.
+             */
+            $user->forceFill([
                 'name' => $account['name'],
                 'email' => $account['email'],
+                'email_verified_at' => now(),
                 'password' => self::PASSWORD,
                 'job_title' => $account['title'],
                 'is_admin' => $account['platform_admin'],
+                'is_active' => true,
                 'timezone' => 'UTC',
+                'locale' => 'en',
+                'theme' => 'system',
+                'remember_token' => Str::random(10),
                 'last_login_at' => $this->at(-1, 8, 42),
                 'last_login_ip' => '127.0.0.1',
-            ]);
+            ])->save();
+
+            $people[$account['key']] = $user;
         }
 
         return $people;
@@ -498,11 +536,21 @@ final class DemoDataSeeder extends Seeder
             ['Interview the client stakeholders', 'admin', -42, 300], ['Interview the client stakeholders', 'admin', -40, 240],
         ], $tasks);
 
-        TimeEntry::factory()
-            ->forTask($tasks['Build the page templates'])
-            ->forUser($this->person('manager'))
-            ->running()
-            ->create(['description' => 'Product listing template — filter states']);
+        $running = $tasks['Build the page templates'];
+
+        TimeEntry::create([
+            'workspace_id' => $running->workspace_id,
+            'project_id' => $running->project_id,
+            'task_id' => $running->getKey(),
+            'user_id' => $this->person('manager')->getKey(),
+            'minutes' => 0,
+            'description' => 'Product listing template — filter states',
+            'spent_on' => Carbon::today()->toDateString(),
+            'started_at' => now()->subMinutes(25),
+            'ended_at' => null,
+            'is_running' => true,
+            'is_billable' => true,
+        ]);
 
         $this->createExpenses($project, [
             ['Stock photography licence — twelve images', 'software', '640.00', -18],
@@ -1146,12 +1194,19 @@ final class DemoDataSeeder extends Seeder
                 continue;
             }
 
-            TimeEntry::factory()
-                ->forTask($task)
-                ->forUser($this->person($person))
-                ->onDate($this->day($daysAgo))
-                ->ofMinutes($minutes)
-                ->create(['description' => $task->title]);
+            TimeEntry::create([
+                'workspace_id' => $task->workspace_id,
+                'project_id' => $task->project_id,
+                'task_id' => $task->getKey(),
+                'user_id' => $this->person($person)->getKey(),
+                'minutes' => $minutes,
+                'description' => $task->title,
+                'spent_on' => $this->day($daysAgo)->toDateString(),
+                'started_at' => null,
+                'ended_at' => null,
+                'is_running' => false,
+                'is_billable' => true,
+            ]);
         }
     }
 
@@ -1161,16 +1216,16 @@ final class DemoDataSeeder extends Seeder
     private function createExpenses(Project $project, array $rows): void
     {
         foreach ($rows as [$description, $category, $amount, $daysAgo]) {
-            Expense::factory()
-                ->inCategory($category)
-                ->ofAmount($amount, (string) ($project->currency ?? 'USD'))
-                ->onDate($this->day($daysAgo))
-                ->paidBy($this->person('admin'))
-                ->create([
-                    'workspace_id' => $project->workspace_id,
-                    'project_id' => $project->getKey(),
-                    'description' => $description,
-                ]);
+            Expense::create([
+                'workspace_id' => $project->workspace_id,
+                'project_id' => $project->getKey(),
+                'user_id' => $this->person('admin')->getKey(),
+                'amount' => $amount,
+                'currency' => (string) ($project->currency ?? 'USD'),
+                'category' => $category,
+                'description' => $description,
+                'incurred_on' => $this->day($daysAgo)->toDateString(),
+            ]);
         }
     }
 
@@ -1200,19 +1255,21 @@ final class DemoDataSeeder extends Seeder
         $position = 0;
 
         foreach ($rows as [$name, $type, $filters, $groupBy, $pinned]) {
-            SavedView::factory()
-                ->forProject($project)
-                ->ofType($type)
-                ->shared()
-                ->create([
-                    'name' => $name,
-                    'filters' => $filters,
-                    'sorts' => [['field' => 'due_date', 'direction' => 'asc']],
-                    'columns' => ['title', 'assignee', 'status', 'priority', 'due_date'],
-                    'group_by' => $groupBy,
-                    'is_pinned' => $pinned,
-                    'position' => $position,
-                ]);
+            SavedView::create([
+                'workspace_id' => $project->workspace_id,
+                'project_id' => $project->getKey(),
+                // Shared views belong to the workspace rather than to a person.
+                'user_id' => null,
+                'name' => $name,
+                'type' => $type,
+                'filters' => $filters,
+                'sorts' => [['field' => 'due_date', 'direction' => 'asc']],
+                'columns' => ['title', 'assignee', 'status', 'priority', 'due_date'],
+                'group_by' => $groupBy,
+                'is_shared' => true,
+                'is_pinned' => $pinned,
+                'position' => $position,
+            ]);
 
             $position++;
         }

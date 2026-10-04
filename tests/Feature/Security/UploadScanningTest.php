@@ -369,7 +369,25 @@ final class UploadScanningTest extends TestCase
      */
     private function clamAvOver(string $response, array $options = []): array
     {
-        $pair = stream_socket_pair(STREAM_PF_INET, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        /*
+           The protocol family has to follow the platform, and getting it wrong fails on
+           one operating system while passing on the other.
+
+           Linux's socketpair(2) accepts AF_UNIX and nothing else — asking it for AF_INET
+           returns EOPNOTSUPP, errno 95, which is precisely what CI reported. Windows has
+           no AF_UNIX socketpair at all, so PHP emulates the call over a loopback INET
+           pair, and AF_INET is the only thing that works there. Hard-coding either one
+           builds a test that only runs on the machine it was written on.
+
+           Neither end goes near a network in either case: this is a pipe with two ends
+           that happens to be reachable through the stream API, standing in for a ClamAV
+           daemon so the scanner can be tested against a real socket rather than a mock.
+        */
+        $pair = stream_socket_pair(
+            DIRECTORY_SEPARATOR === '\\' ? STREAM_PF_INET : STREAM_PF_UNIX,
+            STREAM_SOCK_STREAM,
+            STREAM_IPPROTO_IP,
+        );
 
         $this->assertIsArray($pair, 'This platform cannot create a socket pair.');
 

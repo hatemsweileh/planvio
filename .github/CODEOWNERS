@@ -1,0 +1,34 @@
+# Who gets asked to review what.
+#
+# GitHub requests a review from the owner of every path a pull request touches. For a
+# repository with one maintainer that is mostly a way of never missing a contribution:
+# the request lands in one place whether somebody fixes a typo or rewrites the tenancy
+# layer.
+#
+# The later a rule appears, the more it wins — the last matching pattern for a file is the
+# one that applies, not the union of all of them. So the catch-all goes first.
+#
+# Ownership here is about attention, not permission. What a pull request is allowed to do
+# is decided by branch protection and by the tests, not by this file.
+
+*                       @hatemsweileh
+
+# The parts where a mistake is expensive and quiet, called out so they are never reviewed
+# as an ordinary diff. Each of these is somewhere a wrong change looks fine and fails in
+# production, or fails only for somebody else.
+
+/app/Policies/          @hatemsweileh
+/app/Actions/           @hatemsweileh
+/app/Ai/                @hatemsweileh
+/app/Models/Scopes/     @hatemsweileh
+/database/migrations/   @hatemsweileh
+/tests/Feature/Security/ @hatemsweileh
+
+/composer.json          @hatemsweileh
+/composer.lock          @hatemsweileh
+/.github/               @hatemsweileh
+/scripts/               @hatemsweileh
+/docs/ARCHITECTURE.md   @hatemsweileh
+/docs/SECURITY.md       @hatemsweileh
+/SECURITY.md            @hatemsweileh
+/LICENSE                @hatemsweileh

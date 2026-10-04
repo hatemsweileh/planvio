@@ -62,8 +62,21 @@ Options -Indexes -MultiViews
     RewriteEngine On
 
     # Already inside public/: leave it alone.
-    RewriteCond %{REQUEST_URI} ^/public/ [OR]
+    RewriteCond %{REQUEST_URI} ^/public/
+    RewriteRule ^ - [L]
+
+    # A build asset that genuinely sits at the document root, which is the case when the
+    # document root already points at public/.
+    #
+    # Existence is tested rather than assumed, and that test is the whole point. This used
+    # to be a bare `RewriteCond %{REQUEST_URI} ^/build/` beside the rule above, which
+    # stopped the rewrite for every /build/ request — including under this very fallback,
+    # where the compiled assets live at public/build/ and there is nothing at /build/ at
+    # all. The result was a site that installed cleanly, rendered every page correctly, and
+    # arrived with no styling whatsoever, because the one thing not being forwarded was the
+    # stylesheet. Nothing else was affected, so nothing else pointed at the cause.
     RewriteCond %{REQUEST_URI} ^/build/
+    RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI} -f
     RewriteRule ^ - [L]
 
     # Serve an existing file from public/ (assets, favicon, robots.txt).
