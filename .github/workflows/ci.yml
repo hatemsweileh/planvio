@@ -68,7 +68,7 @@ jobs:
           php artisan key:generate
 
       - name: Download built assets
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: assets
           path: public/build
