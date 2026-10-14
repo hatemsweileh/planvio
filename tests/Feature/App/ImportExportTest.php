@@ -29,6 +29,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use League\Csv\Reader;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
@@ -508,20 +509,24 @@ A-1,Something
     #[Test]
     public function a_project_with_more_tasks_than_one_chunk_exports_every_row(): void
     {
-        // The task export walks each project with `lazyById(500, ...)`. The first chunk is
-        // always fine; it is the seek to the second one that has to find the last id, so a
-        // project needs more than 500 matching tasks before anything past row 500 is read.
+        // The task export walks each project with `lazyById(500, ...)`, which seeks for
+        // another chunk whenever the one it just read came back full. That seek is what has
+        // to find the last id, so 500 matching tasks are already enough to reach it; 501
+        // also proves the row after the boundary arrives.
         $tasks = 501;
 
         for ($i = 1; $i <= $tasks; $i++) {
             $this->task('Bulk task '.$i);
         }
 
-        $body = $this->download('tasks');
+        $csv = Reader::fromString(ltrim($this->download('tasks'), "\xEF\xBB\xBF"));
+        $csv->setHeaderOffset(0);
 
-        $this->assertSame($tasks, preg_match_all('/^WEB-\d+,/m', $body));
-        $this->assertStringContainsString('"Bulk task 1",', $body);
-        $this->assertStringContainsString('"Bulk task '.$tasks.'",', $body);
+        // Every key exactly once and in order, so a duplicated row cannot hide a skipped one.
+        $this->assertSame(
+            array_map(static fn (int $number): string => 'WEB-'.$number, range(1, $tasks)),
+            array_column(iterator_to_array($csv->getRecords(), false), 'Key'),
+        );
     }
 
     #[Test]
