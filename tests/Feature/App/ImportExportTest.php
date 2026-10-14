@@ -506,6 +506,25 @@ A-1,Something
     }
 
     #[Test]
+    public function a_project_with_more_tasks_than_one_chunk_exports_every_row(): void
+    {
+        // The task export walks each project with `lazyById(500, ...)`. The first chunk is
+        // always fine; it is the seek to the second one that has to find the last id, so a
+        // project needs more than 500 matching tasks before anything past row 500 is read.
+        $tasks = 501;
+
+        for ($i = 1; $i <= $tasks; $i++) {
+            $this->task('Bulk task '.$i);
+        }
+
+        $body = $this->download('tasks');
+
+        $this->assertSame($tasks, preg_match_all('/^WEB-\d+,/m', $body));
+        $this->assertStringContainsString('"Bulk task 1",', $body);
+        $this->assertStringContainsString('"Bulk task '.$tasks.'",', $body);
+    }
+
+    #[Test]
     public function the_file_starts_with_a_byte_order_mark_and_the_header_row(): void
     {
         $this->task('Anything');
