@@ -108,7 +108,12 @@ final class TaskExport implements CsvExport
 
             // The eager loads above are re-applied to every chunk, which is what
             // `preventLazyLoading` demands of a mapper that touches seven relations.
-            foreach ($query->lazyById(500, 'tasks.id') as $task) {
+            //
+            // The column is table-qualified like every other column in this query, so the
+            // alias has to be given as well: to seek past a chunk, `lazyById` reads the
+            // last id back off the model under the alias, and the model has an `id`
+            // attribute, never a `tasks.id` one. Without it the walk aborts at row 500.
+            foreach ($query->lazyById(500, 'tasks.id', 'id') as $task) {
                 yield $this->row($task);
             }
         }
