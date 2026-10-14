@@ -1129,19 +1129,28 @@ Output: `dist/planvio-v1.0.0.zip` — the version comes from
    `composer install --no-dev --optimize-autoloader --classmap-authoritative --no-scripts`
    **inside the staging directory**, so your working tree keeps its dev dependencies and
    stays usable immediately afterwards.
-6. **Vendor trim** — removes `tests`, `docs`, `examples`, `.github`, `benchmarks` and CI
+6. **Filament assets** — deletes the staged `public/js/filament`, `public/css/filament`
+   and `public/fonts/filament` and publishes them again with `php artisan filament:assets`,
+   run inside the staging directory against the vendor that is about to ship. Those files
+   are ignored by git, so the copy in your working tree is from whichever Filament version
+   was last installed there (or missing, in a fresh clone), and the `--no-scripts` install
+   above never refreshes it. A release that paired one Filament version's Blade with
+   another's JavaScript would ship a broken admin panel. If Filament's core script or
+   stylesheet did not appear, the build fails. Otherwise it rebuilds the empty `storage/`
+   and `bootstrap/cache` skeletons, because booting the framework writes package manifests.
+7. **Vendor trim** — removes `tests`, `docs`, `examples`, `.github`, `benchmarks` and CI
    config files from each `vendor/<org>/<package>`. It only goes two levels deep on
    purpose: deeper, and it would start deleting directories that packages genuinely ship as
    source.
-7. **Safety sweep** — refuses to package if the staging tree contains a `.env`, a SQLite
+8. **Safety sweep** — refuses to package if the staging tree contains a `.env`, a SQLite
    file, a `.pem` / `.key` / `.p12` / `.pfx`, or any VCS metadata. Then it checks that
    `public/index.php`, `public/.htaccess`, `.htaccess`, `artisan`,
    `public/build/manifest.json`, `config/planvio.php`, `config/ai.php` and
    `bootstrap/app.php` are all present.
-8. **Archive** — writes the ZIP, reopening the archive every 2,000 entries because a full
+9. **Archive** — writes the ZIP, reopening the archive every 2,000 entries because a full
    Laravel + Filament tree is around 15,000 files and holding every handle open exhausts
    the descriptor limit on some machines.
-9. **Report** — prints the path, entry count, size and SHA-256. Publish that hash with the
+10. **Report** — prints the path, entry count, size and SHA-256. Publish that hash with the
    release.
 
 ### Flags
@@ -1149,7 +1158,7 @@ Output: `dist/planvio-v1.0.0.zip` — the version comes from
 | Flag | Effect |
 |---|---|
 | `--skip-assets` | Do not run npm. Reuses whatever is in `public/build`. Fails if `manifest.json` is missing |
-| `--skip-composer` | Do not run Composer. **The ZIP will have no `vendor/` and is not shippable** — use it only to inspect the staging output |
+| `--skip-composer` | Do not run Composer. **The ZIP will have no `vendor/` and no Filament assets, and is not shippable** — use it only to inspect the staging output |
 | `--keep-staging` | Leave `build/staging` in place so you can look at exactly what was packaged |
 
 ### Finding Composer
@@ -1166,8 +1175,8 @@ ignored by the build's own exclusion list.
 - [ ] `config/planvio.php → version` is bumped
 - [ ] `db_version` is bumped **if and only if** the release adds migrations
 - [ ] The build printed "No .env, key material, database file or VCS metadata found"
-- [ ] You extracted the ZIP somewhere clean and confirmed `vendor/` and
-      `public/build/manifest.json` are inside it
+- [ ] You extracted the ZIP somewhere clean and confirmed `vendor/`,
+      `public/build/manifest.json` and `public/js/filament/` are inside it
 
 ---
 

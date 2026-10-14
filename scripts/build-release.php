@@ -147,7 +147,49 @@ if (isset($options['skip-composer'])) {
 }
 
 /* ------------------------------------------------------------------ *
- * 5. Trim vendor
+ * 5. Filament assets
+ * ------------------------------------------------------------------ */
+step('Filament assets');
+
+/*
+ * The admin panel loads its own JavaScript, CSS and fonts from public/{js,css,fonts}/
+ * filament. They are copies of files in vendor/, written by `filament:assets`, and they are
+ * ignored by git, so what the copy step above staged is whatever Filament version was last
+ * installed in the builder's working tree - or nothing at all, in a fresh clone. The
+ * install above runs with --no-scripts, so nothing refreshes them. A release could then
+ * pair one version's PHP and Blade with another version's JavaScript, which breaks the
+ * panel as soon as a Blade view calls a function the old script does not have.
+ *
+ * So the staged copies are thrown away and published again from the vendor/ that ships.
+ * filament:assets needs no .env and no database; it only boots the framework to find the
+ * registered assets.
+ */
+$filamentAssets = ['public/js/filament', 'public/css/filament', 'public/fonts/filament'];
+
+foreach ($filamentAssets as $directory) {
+    rmrf($stage.'/'.$directory);
+}
+
+if (isset($options['skip-composer'])) {
+    line('Skipped (--skip-composer). There is no vendor/ to publish them from.');
+} else {
+    run(escapeshellarg($php).' artisan filament:assets --no-interaction', $stage);
+
+    foreach (['public/js/filament/filament/app.js', 'public/css/filament/filament/app.css'] as $path) {
+        if (! is_file($stage.'/'.$path)) {
+            fail("filament:assets did not produce {$path}.");
+        }
+    }
+
+    // Booting the framework wrote package manifests to bootstrap/cache and may have started a
+    // log. The release ships both as empty skeletons, so lay them out again.
+    resetStorage($stage);
+
+    line('Published from the staged vendor/.');
+}
+
+/* ------------------------------------------------------------------ *
+ * 6. Trim vendor
  * ------------------------------------------------------------------ */
 step('Trimming vendor');
 
@@ -155,7 +197,7 @@ $trimmed = trimVendor($stage.'/vendor');
 line("Removed {$trimmed} development files from vendor/ (tests, docs, CI configs).");
 
 /* ------------------------------------------------------------------ *
- * 6. Safety sweep
+ * 7. Safety sweep
  * ------------------------------------------------------------------ */
 step('Safety sweep');
 
@@ -181,7 +223,7 @@ foreach ($required as $path) {
 line('All required files present.');
 
 /* ------------------------------------------------------------------ *
- * 7. Archive
+ * 8. Archive
  * ------------------------------------------------------------------ */
 step('Creating archive');
 
