@@ -941,33 +941,35 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Security;
 
+use App\Enums\WorkspaceRole;
 use App\Models\Task;
 use App\Support\CurrentWorkspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 final class TaskWorkspaceIsolationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_a_member_of_one_workspace_cannot_reach_a_task_in_another(): void
+    #[Test]
+    public function a_member_of_one_workspace_cannot_reach_a_task_in_another(): void
     {
-        [$alpha, $alphaOwner] = $this->workspaceWithOwner();
-        [$beta] = $this->workspaceWithOwner();
+        $alpha = $this->makeWorkspace();
+        $alphaOwner = $this->makeMember($alpha, WorkspaceRole::Owner);
+        $task = $this->makeTask($this->makeProject($this->makeWorkspace()));
 
-        $task = Task::factory()->for($beta)->create();
-
+        // Looked up through Alpha, the id does not exist: a 404, not a 403 that confirms it.
         $this->actingAs($alphaOwner)
-            ->get("/w/{$alpha->slug}/tasks/{$task->id}")
+            ->get(route('app.tasks.show', [$alpha, $task]))
             ->assertNotFound();
     }
 
-    public function test_the_policy_denies_even_when_no_workspace_is_bound(): void
+    #[Test]
+    public function the_policy_denies_even_when_no_workspace_is_bound(): void
     {
-        [, $alphaOwner] = $this->workspaceWithOwner();
-        [$beta] = $this->workspaceWithOwner();
-
-        $task = Task::factory()->for($beta)->create();
+        $alphaOwner = $this->makeMember($this->makeWorkspace(), WorkspaceRole::Owner);
+        $task = $this->makeTask($this->makeProject($this->makeWorkspace()));
 
         // Nothing bound, so WorkspaceScope is inert. The policy must still say no.
         app(CurrentWorkspace::class)->forget();
@@ -977,13 +979,21 @@ final class TaskWorkspaceIsolationTest extends TestCase
         $this->assertFalse($alphaOwner->can('delete', $task));
     }
 
-    public function test_the_scope_hides_other_workspaces_when_one_is_bound(): void
+    #[Test]
+    public function the_scope_hides_other_workspaces_when_one_is_bound(): void
     {
-        [$alpha] = $this->workspaceWithOwner();
-        [$beta] = $this->workspaceWithOwner();
+        $alpha = $this->makeWorkspace();
+        $beta = $this->makeWorkspace();
 
-        Task::factory()->for($alpha)->count(2)->create();
-        Task::factory()->for($beta)->count(3)->create();
+        $alphaProject = $this->makeProject($alpha);
+        $betaProject = $this->makeProject($beta);
+
+        foreach (range(1, 2) as $i) {
+            $this->makeTask($alphaProject);
+        }
+        foreach (range(1, 3) as $i) {
+            $this->makeTask($betaProject);
+        }
 
         app(CurrentWorkspace::class)->runFor($alpha, function (): void {
             $this->assertSame(2, Task::query()->count());
@@ -1211,50 +1221,29 @@ git, and the build's exclusion list keeps it out of the release.
 
 ## Limitations
 
-This section describes the repository as it stands, not the contract. `ARCHITECTURE.md`
-describes the finished product; a good deal of it is not built yet. Read this before you
-assume something is missing by accident.
+This section describes the repository and its tooling as they stand. What the product
+deliberately does not do is in [LIMITATIONS.md](LIMITATIONS.md).
 
-**Application layers that do not exist yet.** `app/` currently contains `Enums/`,
-`Support/`, `Models/` (only `User`, plus `Concerns/BelongsToWorkspace` and
-`Scopes/WorkspaceScope`), `Providers/` and `Http/Controllers/Controller.php`. There is no
-`app/Actions`, `app/Ai`, `app/Livewire`, `app/Policies`, `app/Services`,
-`app/Notifications`, `app/Http/Middleware`, `app/Http/Requests` or `app/Http/Resources`.
-Create them as you go, matching §2 exactly. Every `App\Actions\*`, `App\Ai\*` and
-`App\Policies\*` reference in this document is a shape to build towards, not a file you can
-open today.
+**No static analysis.** There is no PHPStan or Psalm configuration. Pint checks formatting
+and the test suite checks behaviour; nothing checks types between the two.
 
-**`App\Models\Workspace` does not exist.** Both `BelongsToWorkspace` and `CurrentWorkspace`
-import it. Until that model is written, neither file resolves at runtime. It is the first
-thing to build.
+**Tests run one at a time.** `php artisan test --parallel` needs `brianium/paratest`, which
+is not a dependency, and the suite is not ready for it anyway: the localisation review
+tests write rendered pages to fixed paths under `public/_*.html`, which parallel processes
+would overwrite.
 
-**`App\Models\User` is still the Laravel skeleton.** It has none of the §5.1 columns —
-`avatar_path`, `job_title`, `timezone`, `locale`, `is_admin`, `is_active`, `theme`, the
-two-factor columns, `last_login_at`, `notification_preferences` — and no `SoftDeletes`.
+**Six tests skip in a fresh checkout, by design.** Five localisation review tests need the
+demo workspace and the Arabic locale in the database, and say so when they skip: run
+`./php artisan migrate:fresh --seed --force && ./php artisan planvio:demo --force`, then
+run them with `DB_DATABASE` pointing at `database/database.sqlite`. The sixth exercises a
+file that `finfo_file()` cannot open, and skips on systems where every file opens.
 
-**Most of the schema is unwritten.** `database/migrations/` currently covers users, cache,
-jobs, personal access tokens, and the workspace, team, invitation, comment, attachment,
-activity, notification, time-entry and expense tables. Everything under §5.2 (projects),
-§5.3 (tasks), §5.6 (knowledge), §5.7 (platform) and §5.8 (AI) is still to be written.
+**The suite runs on SQLite only.** CI's MariaDB job migrates fresh with seeds, rolls back
+and migrates again, which proves the schema in both directions, but it does not run the
+tests against MariaDB. A query that only misbehaves on MySQL or MariaDB has to be caught
+in review.
 
-**`tests/` holds only the two stock Laravel example tests.** `tests/Feature/Security` and
-`tests/Feature/Installer` are declared in `phpunit.xml` but the directories do not exist,
-so those suites are empty and PHPUnit will say so until you create them. `tests/TestCase.php`
-has no helpers — the `workspaceWithOwner()` used in the example above is something you need
-to write.
-
-**`config/planvio.php` sets `uploads.disk` to `private`, but `config/filesystems.php`
-defines no disk with that name.** Its disks are `local` (rooted at `storage/app/private`),
-`public` and `s3`. `Storage::disk('private')` throws today. Either add a `private` disk
-pointing at `storage/app/private`, or change the config key — but the `attachments.disk`
-column defaults to `'private'` in §5.6, so adding the disk is the change that matches the
-contract.
-
-**No static analysis, and `--parallel` is unproven.** There is no PHPStan or Psalm
-configuration, and `php artisan test --parallel` has not been exercised against the current
-suite — several tests write into `public/` or hold a database lock, so assume it needs work
-before it is safe.
-
-CI does exist: `.github/workflows/ci.yml` runs the suite on PHP 8.3 and 8.4, migrates
-against MariaDB, checks formatting with Pint, builds the frontend, and asserts that no
-Tailwind utility or translation key went missing.
+CI itself is `.github/workflows/ci.yml`: the suite on PHP 8.3 and 8.4, the MariaDB
+migrations, Pint, the frontend build with its check that the right-to-left utilities and
+the Arabic font are in the stylesheet, and a check that every English translation key has
+an Arabic value with its placeholders intact.
