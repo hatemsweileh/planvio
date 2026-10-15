@@ -8,7 +8,15 @@
 import Sortable from 'sortablejs';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
-import Placeholder from '@tiptap/extension-placeholder';
+/*
+ * Placeholder comes from @tiptap/extensions, where TipTap now maintains it. The stand-alone
+ * @tiptap/extension-placeholder is a one-line re-export of the same class, kept in TipTap's
+ * packages-deprecated only so that old imports go on working, and a deprecated shim is what
+ * a later release is free to remove. StarterKit already depends on @tiptap/extensions for
+ * its cursor, undo and trailing-node extensions, so importing from it adds nothing to the
+ * bundle.
+ */
+import { Placeholder } from '@tiptap/extensions';
 import Link from '@tiptap/extension-link';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';

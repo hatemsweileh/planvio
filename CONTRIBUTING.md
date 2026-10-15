@@ -26,7 +26,7 @@ git clone https://github.com/hatemsweileh/planvio.git
 cd planvio
 
 composer install
-npm install
+npm ci
 npm run build
 
 cp .env.example .env
