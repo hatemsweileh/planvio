@@ -195,6 +195,12 @@ final class AdminPanelTest extends TestCase
     #[Test]
     public function the_dashboard_carries_its_widgets(): void
     {
+        // The AI widget exists only while the master switch is open, and Filament asks a
+        // widget's canView() again when it mounts, so with AI off driving it directly is a 403.
+        // The switch is therefore set here rather than inherited (see phpunit.xml). The
+        // dashboard with AI switched off is asserted on its own, below.
+        config(['ai.enabled' => true]);
+
         $records = $this->seedPanelRecords();
 
         $this->actingAs($this->admin);
@@ -217,6 +223,67 @@ final class AdminPanelTest extends TestCase
         Livewire::test(FailedJobs::class)
             ->assertOk()
             ->assertSee(__('Failed jobs'));
+    }
+
+    /**
+     * AI_ENABLED defaults to false, so this is the dashboard most installations actually have.
+     * It has to open — the dashboard is where every administrator lands after signing in, so a
+     * widget that answered the switch by failing would take the whole panel's front door with
+     * it — and it must not carry the AI widget at all, not even as a lazy placeholder: the
+     * placeholder's second round trip would be refused, and an installation that never turned
+     * AI on has no use for four permanent zeroes.
+     */
+    #[Test]
+    public function the_dashboard_opens_without_the_ai_widget_when_ai_is_switched_off(): void
+    {
+        config(['ai.enabled' => false]);
+
+        $this->seedPanelRecords();
+
+        $this->actingAs($this->admin)
+            ->get('/admin')
+            ->assertOk()
+            ->assertSeeLivewire(PlatformTotals::class)
+            ->assertSeeLivewire(RecentAuditEvents::class)
+            ->assertSeeLivewire(FailedJobs::class)
+            ->assertDontSeeLivewire(AiRunsToday::class);
+
+        // Nor can it be reached around the dashboard. Filament asks canView() again when the
+        // component mounts, so a stale placeholder or a hand-built request is refused rather
+        // than counting runs on an installation with AI switched off.
+        Filament::setCurrentPanel('admin');
+
+        $this->assertFalse(AiRunsToday::canView());
+
+        Livewire::test(AiRunsToday::class)->assertForbidden();
+    }
+
+    /**
+     * The other half of the same switch, so that the test above cannot pass merely because the
+     * widget has stopped rendering for everybody.
+     */
+    #[Test]
+    public function the_dashboard_carries_the_ai_widget_when_ai_is_switched_on(): void
+    {
+        config(['ai.enabled' => true]);
+
+        $this->seedPanelRecords();
+
+        $this->actingAs($this->admin)
+            ->get('/admin')
+            ->assertOk()
+            ->assertSeeLivewire(PlatformTotals::class)
+            ->assertSeeLivewire(RecentAuditEvents::class)
+            ->assertSeeLivewire(FailedJobs::class)
+            ->assertSeeLivewire(AiRunsToday::class);
+
+        Filament::setCurrentPanel('admin');
+
+        $this->assertTrue(AiRunsToday::canView());
+
+        Livewire::test(AiRunsToday::class)
+            ->assertOk()
+            ->assertSee(__('AI runs today'));
     }
 
     #[Test]

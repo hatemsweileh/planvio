@@ -202,7 +202,13 @@ final class RateLimitingTest extends TestCase
     {
         Queue::fake();
 
-        config(['planvio.security.rate_limits.ai_runs' => 1]);
+        // The burst limit is charged after AiGate, so the first send has to get through the
+        // gate for there to be a burst at all. That is why the installation's master switch is
+        // opened here rather than inherited (see phpunit.xml).
+        config([
+            'ai.enabled' => true,
+            'planvio.security.rate_limits.ai_runs' => 1,
+        ]);
 
         AiSetting::factory()->create([
             'workspace_id' => $this->workspace->getKey(),

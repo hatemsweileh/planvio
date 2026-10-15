@@ -80,6 +80,17 @@ jobs:
         if: matrix.database == 'sqlite'
         run: php artisan test
 
+      # The same suite again with AI switched off, which is how Planvio ships. phpunit.xml's
+      # AI_ENABLED=true gives way to a value already in the environment, so this is also what
+      # a contributor's shell can hand the suite without meaning to; a test that only passes
+      # with AI on has to switch it on itself, and this is the run that catches one that does
+      # not. Once is enough, so it runs on a single leg of the matrix.
+      - name: Run the test suite with AI switched off (SQLite)
+        if: matrix.database == 'sqlite' && matrix.php == '8.4'
+        env:
+          AI_ENABLED: 'false'
+        run: php artisan test
+
       - name: Run migrations against MariaDB
         if: matrix.database == 'mariadb'
         env:

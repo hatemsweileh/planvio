@@ -906,7 +906,7 @@ composer run test                             # clears config first, then runs
 
 ### The test environment
 
-`phpunit.xml` pins it, so tests never touch your development database or the network:
+`phpunit.xml` sets it, so tests never touch your development database or the network:
 
 | | |
 |---|---|
@@ -923,6 +923,18 @@ AI is deliberately **on** in tests so the tool registry, policy engine and agent
 exercised on every run. No provider is configured, so any test that reaches the network
 must fake the HTTP client. **A real outbound request in the suite is a bug**, not a slow
 test.
+
+That `true` is a default rather than a guarantee. An `<env>` entry without `force="true"`
+gives way to a variable already set in the process environment, so an `AI_ENABLED` exported
+in your shell or by a CI runner wins — and Planvio itself ships with AI off. A test whose
+outcome depends on the master switch therefore sets it itself, with
+`config(['ai.enabled' => true])` (or `false`, for the switched-off path), rather than
+inheriting it. CI runs the whole suite a second time with AI switched off to hold every test
+to that; to do the same locally:
+
+```bash
+AI_ENABLED=false php artisan test
+```
 
 ### The isolation rule
 
@@ -1246,7 +1258,7 @@ and migrates again, which proves the schema in both directions, but it does not 
 tests against MariaDB. A query that only misbehaves on MySQL or MariaDB has to be caught
 in review.
 
-CI itself is `.github/workflows/ci.yml`: the suite on PHP 8.3 and 8.4, the MariaDB
-migrations, Pint, the frontend build with its check that the right-to-left utilities and
-the Arabic font are in the stylesheet, and a check that every English translation key has
-an Arabic value with its placeholders intact.
+CI itself is `.github/workflows/ci.yml`: the suite on PHP 8.3 and 8.4 (and on 8.4 a second
+time, with AI switched off), the MariaDB migrations, Pint, the frontend build with its
+check that the right-to-left utilities and the Arabic font are in the stylesheet, and a
+check that every English translation key has an Arabic value with its placeholders intact.

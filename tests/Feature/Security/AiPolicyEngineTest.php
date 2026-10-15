@@ -58,11 +58,25 @@ use Tests\TestCase;
  * is not given any. Copilot confirms every change and no read. Autonomous runs to the
  * configured ceiling and stops above it. The four unwaivable tools stop in every mode under
  * every policy. And an approval, once recorded, is granted once — approving twice executes
- * once, and an approval granted while the kill switch is engaged does not restart anything.
+ * once, and an approval granted while the kill switch is engaged or the master switch is off
+ * does not restart anything.
  */
 final class AiPolicyEngineTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // The master switch is the outermost tier of the stack under test, so it is opened
+        // here deliberately rather than inherited (see phpunit.xml), and closed only by the
+        // tests that are about it. With it off every policy below would resolve to the same
+        // closed one, the precedence tests would compare nothing, and an approval the kill
+        // switch is meant to hold back would be held back by the master switch instead,
+        // passing for the wrong reason.
+        config(['ai.enabled' => true]);
+    }
 
     /* ------------------------------------------------------------------ *
      * Modes
@@ -630,6 +644,32 @@ final class AiPolicyEngineTest extends TestCase
         // The decision is on the record, but the kill switch outranks it.
         $this->assertSame(ToolRunStatus::Approved, $this->reload($toolRun)->status);
         $this->assertSame(0, $resumer->calls, 'The kill switch did not stop an approved run from resuming.');
+        $this->assertSame(AiRunStatus::Cancelled, $run->fresh()?->status);
+    }
+
+    /**
+     * The same rule one tier further out. A call parked while AI was on can still be sitting
+     * in the queue after an administrator switches the installation off, and approving it then
+     * must not start the agent loop again behind the master switch's back.
+     */
+    public function test_an_approval_does_not_resume_a_run_while_the_master_switch_is_off(): void
+    {
+        $workspace = $this->makeWorkspace();
+        $owner = $this->makeMember($workspace, WorkspaceRole::Owner);
+        $this->settingsFor($workspace, AiMode::Autonomous);
+
+        $run = $this->park($this->runFor($workspace, $owner));
+        $toolRun = $this->pendingToolRun($run);
+
+        config(['ai.enabled' => false]);
+
+        $resumer = $this->fakeResumer();
+
+        app(ApprovalService::class)->approve($toolRun, $owner);
+
+        // The decision is on the record, but the master switch outranks it.
+        $this->assertSame(ToolRunStatus::Approved, $this->reload($toolRun)->status);
+        $this->assertSame(0, $resumer->calls, 'The master switch did not stop an approved run from resuming.');
         $this->assertSame(AiRunStatus::Cancelled, $run->fresh()?->status);
     }
 
