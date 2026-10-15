@@ -1176,8 +1176,47 @@ Output: `dist/planvio-v1.0.0.zip` — the version comes from
    whether or not your working tree has a `vendor/`: Tailwind reads only the sources
    `resources/css/app.css` lists, and none of them is under `vendor/`, so a release built
    from a fresh clone ships the CSS CI built and tested.
-3. **Staging** — copies the tree into `build/staging`. It copies from the filesystem, not
-   from git, so `.gitignore` protects nothing here and everything below is an explicit rule:
+3. **Staging** — copies the tree into `build/staging`. It copies from the filesystem rather
+   than from git, because the release needs files git does not have — `public/build/` —
+   and it decides what to leave out in two layers.
+
+   **`.gitignore`, as git reads it.** When the repository is a git work tree that tracks
+   `composer.json` and `git` is on your `PATH`, the builder first applies the explicit
+   rules below, then hands every remaining file and directory to a single
+   `git check-ignore --stdin -z` and leaves out whatever git reports. That is every rule
+   git itself applies: the root `.gitignore`, a `.gitignore` in any subdirectory
+   (`database/.gitignore` ignores `*.sqlite*`, for instance), `.git/info/exclude` and your
+   global excludes file (`core.excludesFile`). An ignored directory is left out entirely,
+   not shipped as an empty folder. The paths go to git and come back through temporary
+   files, NUL-separated and each prefixed with `./`, so git matches every name as written;
+   without the prefix, a name starting with `:` would be read as pathspec magic.
+   - Files git **tracks** are never excluded this way, even when a pattern matches them:
+     `check-ignore` does not report them, and a file committed in spite of `.gitignore` is
+     in the repository on purpose.
+   - **`public/build/` is the one exception.** It is ignored so that compiled assets never
+     cause merge conflicts, but production has no Node, so it is never passed to
+     `check-ignore` and always ships. Nothing else the release needs is untracked:
+     `vendor/` is installed in staging (step 5) and Filament's assets are published there
+     (step 6).
+   - The build then prints how many files `.gitignore` excluded beyond the explicit rules,
+     grouped by top-level directory — for example
+     `.gitignore excluded 3 files beyond the explicit rules: database/ 1, public/ 2.` — so
+     anything that should have shipped stands out. Files that later steps throw away
+     anyway (anything under `storage/` or `bootstrap/cache/`, `resources/views/dev/`,
+     `public/_*` and Filament's published assets) are kept out of that breakdown, and the
+     line only gives their total, in brackets: a working tree that has run the test suite
+     holds hundreds of them.
+   - If `git` is not installed, or the tree is not a git work tree (a source download, or
+     a copy without `.git`), it prints one line saying so and stages with the explicit
+     rules alone. It does the same if `git check-ignore` fails, or if the repository git
+     finds does not track `composer.json`: then the tree is a copy sitting untracked inside
+     some other repository, whose ignore rules are not Planvio's and could drop files the
+     release needs — all of them, or just `composer.lock` through a `*.lock` of its own.
+
+   **The explicit rules**, which apply with or without git. They are the only thing that
+   keeps out files git tracks but a customer has no use for (`tests`, `design`, `.github`,
+   `phpunit.xml`, the repository furniture), and where they repeat `.gitignore` they do so
+   on purpose, so that a build without git still comes out clean:
    - Top-level directories skipped: `.git`, `.hg`, `.svn`, `.github`, `.idea`, `.vscode`,
      `.zed`, `.nova`, `.fleet`, `.cursor`, `.codex`, `.claude`, `.phpunit.cache`,
      `node_modules`, `vendor`, `build`, `dist`, `tests`, `design`, `scratchpad`, `github`,
@@ -1223,9 +1262,10 @@ Output: `dist/planvio-v1.0.0.zip` — the version comes from
 6. **Filament assets** — deletes the staged `public/js/filament`, `public/css/filament`
    and `public/fonts/filament` and publishes them again with `php artisan filament:assets`,
    run inside the staging directory against the vendor that is about to ship. Those files
-   are ignored by git, so the copy in your working tree is from whichever Filament version
-   was last installed there (or missing, in a fresh clone), and the `--no-scripts` install
-   above never refreshes it. A release that paired one Filament version's Blade with
+   are ignored by git, so staging normally leaves them out; a build without git copies them
+   from your working tree, where they are from whichever Filament version was last
+   installed (or missing, in a fresh clone), and the `--no-scripts` install above never
+   refreshes them. A release that paired one Filament version's Blade with
    another's JavaScript would ship a broken admin panel. If Filament's core script or
    stylesheet did not appear, the build fails. Otherwise it rebuilds the empty `storage/`
    and `bootstrap/cache` skeletons, because booting the framework writes package manifests.
@@ -1258,10 +1298,37 @@ Output: `dist/planvio-v1.0.0.zip` — the version comes from
 
 ### Finding Composer
 
-`detectComposer()` looks in this order: `C:/tools/composer/composer.phar`,
-`<repo>/composer.phar`, `/usr/local/bin/composer`. If yours is somewhere else, drop a
-`composer.phar` in the repository root — that is the portable option. It is ignored by
-git, and the build's exclusion list keeps it out of the release.
+`detectComposer()` tries these in order and uses the first one that works:
+
+1. `C:/tools/composer/composer.phar`
+2. `<repo>/composer.phar`
+3. `/usr/local/bin/composer`
+4. `composer`, then `composer.phar`, in each directory on your `PATH`, in order. The
+   builder walks `PATH` itself rather than asking the shell, because `command -v` only
+   names the first match, and a wrapper there would hide a working Composer further
+   along; `composer.phar` is included because Composer-Setup on Windows puts it beside
+   the `composer.bat` it adds to `PATH`. This is only searched when none of the first
+   three works, and a match only counts if it is a PHP script — an optional `#!` line
+   naming PHP, then `<?php` — because a `composer` on `PATH` is often a wrapper PHP cannot
+   run, such as a shell script from a version manager.
+
+A candidate that does not exist is passed over silently. One that exists is run as
+`<php> <candidate> --version` and accepted only if it exits with 0 and prints a
+`Composer version …` line. Otherwise it is listed as rejected, with the exit code or the
+first line it printed instead, and the next candidate is tried. A half-downloaded or stray
+`composer.phar` in the repository root therefore no longer becomes the build's Composer
+just because it exists. The header says which one was chosen and why the others were not:
+
+```
+Composer       : /usr/local/bin/composer (Composer version 2.8.12 2025-09-19 13:41:59)
+                 rejected /path/to/planvio/composer.phar: `--version` did not print a Composer version; it printed "not composer"
+```
+
+The search runs with `--skip-composer` too, so you can see which Composer a full build
+would use, but finding none is only an error when Composer is needed. If yours is
+somewhere else and not on `PATH`, drop a working `composer.phar` in the repository root —
+that is the portable option. It is ignored by git, and the build's exclusion list keeps it
+out of the release whether or not it was the one used.
 
 ### Before you ship a build
 
@@ -1270,6 +1337,7 @@ git, and the build's exclusion list keeps it out of the release.
 - [ ] `config/planvio.php → version` is bumped
 - [ ] `db_version` is bumped **if and only if** the release adds migrations
 - [ ] The build printed "No .env, key material, database file or VCS metadata found"
+- [ ] The `.gitignore excluded …` line names nothing you expected to ship
 - [ ] You extracted the ZIP somewhere clean and confirmed `vendor/`,
       `public/build/manifest.json` and `public/js/filament/` are inside it
 

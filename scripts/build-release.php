@@ -15,14 +15,17 @@ declare(strict_types=1);
  *     ./php scripts/build-release.php --skip-assets    (reuse an existing public/build)
  *
  * The build happens in a staging directory so the working tree keeps its dev
- * dependencies and stays usable immediately afterwards.
+ * dependencies and stays usable immediately afterwards. What goes into that directory is
+ * decided by .gitignore, read through git, with this script's own explicit rules applied
+ * first, and alone when there is no git to ask (see stagingCandidates() and ignoredByGit()).
  */
 const ROOT = __DIR__.'/..';
 
 $options = getopt('', ['skip-assets', 'skip-composer', 'keep-staging']);
 
 $php = detectPhp();
-$composer = detectComposer();
+$composerSearch = detectComposer($php);
+$composer = $composerSearch['path'];
 
 $version = readVersion();
 $stage = ROOT.'/build/staging';
@@ -32,7 +35,10 @@ $zipPath = $dist.'/planvio-v'.$version.'.zip';
 title('Planvio release builder');
 line("Version        : {$version}");
 line("PHP            : {$php}");
-line('Composer       : '.($composer ?? 'not found'));
+line('Composer       : '.($composer === null ? 'not found' : "{$composer} ({$composerSearch['version']})"));
+foreach ($composerSearch['rejected'] as $rejection) {
+    line('                 rejected '.$rejection);
+}
 line('Staging        : '.realish($stage));
 line('Output         : '.realish($zipPath));
 
@@ -74,6 +80,15 @@ step('Staging source tree');
 rmrf($stage);
 mkdirp($stage);
 
+/*
+ * The explicit rules. They hold whether or not git is there to ask, and they are the only
+ * thing that keeps out what git TRACKS but a customer has no use for - tests/, design/,
+ * .github/, phpunit.xml, the contributing guide - because .gitignore says nothing about a
+ * committed file. Where they overlap with .gitignore (vendor, editor state, logs, local
+ * scripts) the overlap is deliberate: a release built from a source download, a CI cache or
+ * any other copy without .git still has to come out clean, and a line deleted from
+ * .gitignore for some unrelated reason must not quietly start shipping what it used to hide.
+ */
 $excludeDirs = [
     '.git', '.hg', '.svn', '.github', '.idea', '.vscode', 'node_modules', 'vendor',
     'build', 'dist', 'tests', 'design', '.claude', 'scratchpad',
@@ -87,9 +102,9 @@ $excludeDirs = [
     'wiki', 'planvio-wiki', 'planvio.wiki',
 ];
 
-// Environment files are not in this list: copyTree() skips every `.env`, `.env.*` and the like
-// except `.env.example`, files and directories alike, because a list of names only covers the
-// names somebody thought of. See isEnvironmentFile().
+// Environment files are not in this list: stagingCandidates() skips every `.env`, `.env.*`
+// and the like except `.env.example`, files and directories alike, because a list of names
+// only covers the names somebody thought of. See isEnvironmentFile().
 $excludeFiles = [
     'php', 'composer', 'php.bat', 'composer.bat', 'composer.phar', 'phpunit.xml', 'pint.json',
     'package-lock.json',
@@ -108,14 +123,54 @@ $excludeFiles = [
     // and instructions written for a coding agent are not part of the product.
     'CLAUDE.md', 'AGENTS.md',
     // One-off maintenance scripts, ignored by git for the same reason. The release is
-    // staged from the filesystem rather than from git, so .gitignore does not protect
-    // it: a demo-seeding script left in a working tree would otherwise land in the web
-    // root of every installation built from this ZIP.
+    // staged from the filesystem rather than from git, so .gitignore only protects it
+    // when git is there to ask: without that, a demo-seeding script left in a working
+    // tree would land in the web root of every installation built from this ZIP.
     'seed-demo.php',
 ];
 
-$copied = copyTree(ROOT, $stage, $excludeDirs, $excludeFiles);
+$candidates = stagingCandidates(ROOT, $excludeDirs, $excludeFiles);
+$ignored = ignoredByGit(ROOT, array_column($candidates, 0));
+
+$copied = 0;
+$excludedByGit = [];
+$excludedAnyway = 0;
+
+foreach ($candidates as [$relative, $isDir, $source]) {
+    if ($ignored !== null && isset($ignored[$relative])) {
+        // A directory is left out as well as its contents, so an ignored directory that
+        // happens to exist locally - storage/pail, or public/storage made as a real folder
+        // rather than a link - does not reach the release even as an empty shell. An empty
+        // public/storage would stop the installer from creating the real link.
+        if ($isDir) {
+            continue;
+        }
+
+        if (discardedLater($relative)) {
+            $excludedAnyway++;
+        } else {
+            $excludedByGit[] = $relative;
+        }
+
+        continue;
+    }
+
+    if ($isDir) {
+        mkdirp($stage.'/'.$relative);
+
+        continue;
+    }
+
+    mkdirp(dirname($stage.'/'.$relative));
+    copy($source, $stage.'/'.$relative);
+    $copied++;
+}
+
 line("Copied {$copied} files.");
+
+if ($ignored !== null) {
+    line(describeGitExclusions($excludedByGit, $excludedAnyway));
+}
 
 // Storage must ship as an empty, writable skeleton, never with local data.
 resetStorage($stage);
@@ -140,7 +195,7 @@ if (isset($options['skip-composer'])) {
     line('Skipped (--skip-composer). vendor/ will be missing from the archive.');
 } else {
     if ($composer === null) {
-        fail('Composer not found and --skip-composer was not passed.');
+        fail('No working Composer found (see "Composer" at the top) and --skip-composer was not passed.');
     }
     run(
         escapeshellarg($php).' '.escapeshellarg($composer)
@@ -163,13 +218,14 @@ step('Filament assets');
 /*
  * The admin panel loads its own JavaScript, CSS and fonts from public/{js,css,fonts}/
  * filament. They are copies of files in vendor/, written by `filament:assets`, and they are
- * ignored by git, so what the copy step above staged is whatever Filament version was last
- * installed in the builder's working tree - or nothing at all, in a fresh clone. The
- * install above runs with --no-scripts, so nothing refreshes them. A release could then
- * pair one version's PHP and Blade with another version's JavaScript, which breaks the
- * panel as soon as a Blade view calls a function the old script does not have.
+ * ignored by git. Staging leaves them out when it can ask git, but a build without git
+ * stages whatever Filament version was last installed in the builder's working tree - or
+ * nothing at all, in a fresh clone. The install above runs with --no-scripts, so nothing
+ * refreshes them. A release could then pair one version's PHP and Blade with another
+ * version's JavaScript, which breaks the panel as soon as a Blade view calls a function the
+ * old script does not have.
  *
- * So the staged copies are thrown away and published again from the vendor/ that ships.
+ * So any staged copies are thrown away and published again from the vendor/ that ships.
  * filament:assets needs no .env and no database; it only boots the framework to find the
  * registered assets.
  */
@@ -309,15 +365,151 @@ function detectPhp(): string
     return PHP_BINARY;
 }
 
-function detectComposer(): ?string
+/**
+ * The first Composer that actually runs.
+ *
+ * The places to look, in order: C:/tools/composer/composer.phar, composer.phar in the
+ * repository root, /usr/local/bin/composer, and then `composer` and `composer.phar` in each
+ * directory on PATH. Existence used to be the whole test, and the repository-root
+ * composer.phar is exactly the file for which existence proves nothing: it is the one
+ * somebody drops in by hand, so it is also the one that turns out to be a download that
+ * stopped half-way, an HTML error page saved under that name, or something unrelated left
+ * behind. Whatever it was became the build's Composer, and the build then died at the
+ * install step with an error that pointed at Composer rather than at the file - while a
+ * working Composer sat one place further down the list.
+ *
+ * So each candidate that exists is run as `<php> <candidate> --version` and accepted only if
+ * it exits with 0 and prints Composer's own "Composer version ..." line. One that does not
+ * is reported with the reason, and the search moves on to the next. A candidate that does
+ * not exist is passed over without comment; on most machines most of them will not.
+ *
+ * PATH comes last, so the documented locations keep the precedence they have always had,
+ * and it is only consulted when none of them works. What it finds also only counts when it
+ * is a PHP script: the `composer` on a PATH is often a wrapper instead - a shell script
+ * from a version manager, say - and PHP handed a wrapper simply prints it.
+ *
+ * @return array{path: ?string, version: ?string, rejected: list<string>}
+ */
+function detectComposer(string $php): array
 {
-    foreach (['C:/tools/composer/composer.phar', ROOT.'/composer.phar', '/usr/local/bin/composer'] as $path) {
-        if (is_file($path)) {
-            return $path;
+    $rejected = [];
+    $tried = [];
+
+    foreach (composerCandidates() as $source => $candidate) {
+        if (! is_file($candidate)) {
+            continue;
+        }
+
+        // The same file, minus the `scripts/..` that ROOT carries, so the report reads cleanly.
+        $candidate = realish($candidate);
+
+        // /usr/local/bin/composer is very often also what PATH finds. Running it twice
+        // tells nobody anything.
+        $identity = realpath($candidate) ?: $candidate;
+        if (isset($tried[$identity])) {
+            continue;
+        }
+        $tried[$identity] = true;
+
+        if ($source === 'path' && ! isPhpScript($candidate)) {
+            $rejected[] = "{$candidate} (from PATH): not a PHP script - a shell wrapper, presumably -"
+                .' so PHP cannot run it';
+
+            continue;
+        }
+
+        $result = capture(escapeshellarg($php).' '.escapeshellarg($candidate).' --version', ROOT, '');
+
+        if ($result === null) {
+            $rejected[] = "{$candidate}: could not be started";
+
+            continue;
+        }
+
+        // Colour codes are stripped in case something in the environment forces them on.
+        $output = (string) preg_replace('/\e\[[0-9;]*m/', '', $result['stdout']."\n".$result['stderr']);
+
+        if ($result['code'] !== 0) {
+            $rejected[] = "{$candidate}: `--version` exited with code {$result['code']}".printed($output, ', printing ');
+
+            continue;
+        }
+
+        if (preg_match('/^Composer version \S.*$/m', $output, $matches) !== 1) {
+            $rejected[] = "{$candidate}: `--version` did not print a Composer version".printed($output, '; it printed ');
+
+            continue;
+        }
+
+        return ['path' => $candidate, 'version' => trim($matches[0]), 'rejected' => $rejected];
+    }
+
+    return ['path' => null, 'version' => null, 'rejected' => $rejected];
+}
+
+/**
+ * Where to look for Composer, keyed by where the candidate came from.
+ *
+ * A generator, so PATH is only searched once the fixed locations have all failed. It is
+ * searched here, one directory at a time, rather than by asking the shell: `command -v`
+ * names only the first `composer` on PATH, so a wrapper early in PATH would hide a working
+ * Composer later in it, and Windows' `where` behaves differently again. Each directory
+ * offers `composer.phar` as well as `composer`, because Composer-Setup on Windows puts the
+ * phar beside the composer.bat it adds to PATH, and the batch file is no use to PHP.
+ *
+ * @return Generator<string, string>
+ */
+function composerCandidates(): Generator
+{
+    yield 'fixed' => 'C:/tools/composer/composer.phar';
+    yield 'fixed' => ROOT.'/composer.phar';
+    yield 'fixed' => '/usr/local/bin/composer';
+
+    foreach (explode(PATH_SEPARATOR, (string) getenv('PATH')) as $directory) {
+        // A Windows PATH entry is sometimes written in quotes, which Windows ignores.
+        $directory = trim($directory, '"');
+
+        if ($directory === '') {
+            continue;
+        }
+
+        yield 'path' => rtrim($directory, '/\\').'/composer';
+        yield 'path' => rtrim($directory, '/\\').'/composer.phar';
+    }
+}
+
+/**
+ * Whether PHP can run the file: an optional `#!` line that names PHP, then the opening tag.
+ * Composer's own phar starts that way, and so does the script Linux distributions package.
+ */
+function isPhpScript(string $path): bool
+{
+    $head = (string) @file_get_contents($path, false, null, 0, 512);
+
+    return preg_match('/\A(#![^\n]*php[^\n]*\n)?<\?php/i', $head) === 1;
+}
+
+/**
+ * The first line a rejected candidate printed, quoted and shortened, for the report.
+ */
+function printed(string $output, string $prefix): string
+{
+    $first = firstLine($output);
+
+    return $first === '' ? $prefix.'nothing' : $prefix.'"'.$first.'"';
+}
+
+function firstLine(string $text): string
+{
+    foreach (preg_split('/\R/', $text) ?: [] as $candidate) {
+        $candidate = trim($candidate);
+
+        if ($candidate !== '') {
+            return strlen($candidate) > 100 ? substr($candidate, 0, 97).'...' : $candidate;
         }
     }
 
-    return null;
+    return '';
 }
 
 /**
@@ -342,9 +534,23 @@ function readVersion(): string
     return '1.0.0';
 }
 
-function copyTree(string $from, string $to, array $excludeDirs, array $excludeFiles): int
+/**
+ * Every directory and file under $from that the explicit rules let into the release, as
+ * [relative path, is a directory, path on disk] triples with each directory before its
+ * contents.
+ *
+ * Nothing is copied here: ignoredByGit() has to see the whole list first, so that git is
+ * asked once rather than once per file. A list rather than an array keyed by path, because
+ * PHP turns a key such as "404" into an integer, and strict types would then reject it the
+ * first time it reached a string function. The path on disk travels with the relative one
+ * because the two are not always the same file: the relative path has `\` turned into `/`
+ * for Windows, and on Linux a backslash is an ordinary character in a file name.
+ *
+ * @return list<array{0: string, 1: bool, 2: string}>
+ */
+function stagingCandidates(string $from, array $excludeDirs, array $excludeFiles): array
 {
-    $count = 0;
+    $candidates = [];
 
     $iterator = new RecursiveIteratorIterator(
         new RecursiveCallbackFilterIterator(
@@ -377,7 +583,7 @@ function copyTree(string $from, string $to, array $excludeDirs, array $excludeFi
         }
 
         if ($item->isDir()) {
-            mkdirp($to.'/'.$relative);
+            $candidates[] = [$relative, true, $item->getPathname()];
 
             continue;
         }
@@ -409,12 +615,170 @@ function copyTree(string $from, string $to, array $excludeDirs, array $excludeFi
             continue;
         }
 
-        mkdirp(dirname($to.'/'.$relative));
-        copy($item->getPathname(), $to.'/'.$relative);
-        $count++;
+        $candidates[] = [$relative, false, $item->getPathname()];
     }
 
-    return $count;
+    return $candidates;
+}
+
+/**
+ * Which of $paths git ignores, as a set keyed by path, or null when git cannot be asked.
+ *
+ * .gitignore is the list people actually keep up to date. A new tool that leaves a cache or
+ * a log behind shows up in `git status` the first day it is used, so it gets a line there;
+ * nothing prompts anybody to add the same line to this script. The explicit rules were a
+ * hand-kept copy of .gitignore, and a copy drifts: whatever only .gitignore knew about went
+ * into the release. Git is asked rather than .gitignore parsed here, because the syntax -
+ * negation, anchoring, `**`, directory-only patterns, a .gitignore in any directory,
+ * .git/info/exclude and the user's core.excludesFile - is git's to interpret, and a
+ * re-implementation would be one more copy to drift.
+ *
+ * check-ignore never reports a tracked file, even one a pattern matches, and that is the
+ * right answer: something committed in spite of .gitignore is in the repository on purpose.
+ * Nothing the release needs is untracked apart from public/build - vendor/ is installed in
+ * staging and Filament's assets are published there - and public/build is never asked
+ * about at all. It is ignored so that compiled assets cannot produce merge conflicts, but
+ * production has no Node, so the release has to carry it.
+ *
+ * Everything goes to one `git check-ignore --stdin -z`: one process for the whole tree
+ * rather than one per file, with the paths fed in through a file by capture() - which
+ * cannot deadlock the way two pipes can - and NUL-separated in both directions. Each path
+ * goes in with `./` in front, because git reads them as pathspecs: a name that begins with
+ * a colon would otherwise be taken for pathspec magic, so that `:php` is read as `php`,
+ * and `:(x)y` is refused outright and fails the whole query. With the prefix every name is
+ * matched as written, whatever characters it holds, and git hands the prefix back on each
+ * path it reports.
+ *
+ * @param list<string> $paths
+ * @return array<string, true>|null
+ */
+function ignoredByGit(string $root, array $paths): ?array
+{
+    $git = 'git -C '.escapeshellarg($root);
+    $where = realpath($root) ?: $root;
+
+    $tracked = capture($git.' ls-files -z -- composer.json', $root, '');
+
+    if ($tracked === null || $tracked['code'] !== 0) {
+        $version = capture('git --version', $root, '');
+        $reason = firstLine($tracked['stderr'] ?? '');
+
+        line($version === null || $version['code'] !== 0
+            ? 'git is not available, so .gitignore was not consulted: staging with the explicit rules only.'
+            : "{$where} is not inside a git work tree".($reason === '' ? '' : " (git: {$reason})")
+                .', so .gitignore was not consulted: staging with the explicit rules only.');
+
+        return null;
+    }
+
+    /*
+     * The rules git applies here are Planvio's only when this tree is a checkout of Planvio,
+     * and the test for that is that git tracks composer.json. A copy sitting untracked inside
+     * some other repository - a source download unpacked into a project of its own, say - is
+     * subject to that repository's ignore rules instead, and they may cover all of it, or
+     * only composer.lock through a `*.lock` of their own. Either way files the release needs
+     * would quietly go missing, so such a tree is staged as if there were no git to ask.
+     */
+    if (! in_array('composer.json', explode("\0", $tracked['stdout']), true)) {
+        line("git does not track composer.json at {$where}, so the ignore rules there need not be Planvio's:"
+            .' staging with the explicit rules only.');
+
+        return null;
+    }
+
+    $asked = array_values(array_filter(
+        $paths,
+        fn (string $path): bool => $path !== 'public/build' && ! str_starts_with($path, 'public/build/'),
+    ));
+
+    if ($asked === []) {
+        return [];
+    }
+
+    $input = '';
+    foreach ($asked as $path) {
+        $input .= './'.$path."\0";
+    }
+
+    $answer = capture($git.' check-ignore --stdin -z', $root, $input);
+
+    // 0 means at least one path is ignored and 1 means none is; anything else is git failing.
+    if ($answer === null || ! in_array($answer['code'], [0, 1], true)) {
+        $reason = firstLine($answer['stderr'] ?? '');
+
+        line('git check-ignore '.($answer === null ? 'could not be started' : "failed with exit code {$answer['code']}")
+            .($reason === '' ? '' : " ({$reason})")
+            .', so .gitignore was not consulted: staging with the explicit rules only.');
+
+        return null;
+    }
+
+    $ignored = [];
+    foreach (explode("\0", $answer['stdout']) as $reported) {
+        if ($reported !== '') {
+            $ignored[str_starts_with($reported, './') ? substr($reported, 2) : $reported] = true;
+        }
+    }
+
+    return $ignored;
+}
+
+/**
+ * Whether a later step of the build throws $relative away, whatever staging does with it:
+ * storage/ and bootstrap/cache/ are laid out again empty, the design gallery and everything
+ * in public/ it rendered (public/_*) are deleted, and Filament's assets are published afresh
+ * from the vendor/ that ships. .gitignore excluding one of these changes nothing, and a
+ * working tree holds hundreds of them once the test suite or a local instance has run, so
+ * describeGitExclusions() gives them as a total and keeps them out of the breakdown.
+ */
+function discardedLater(string $relative): bool
+{
+    $places = [
+        'storage/', 'bootstrap/cache/', 'resources/views/dev/', 'public/_',
+        'public/js/filament/', 'public/css/filament/', 'public/fonts/filament/',
+    ];
+
+    foreach ($places as $place) {
+        if (str_starts_with($relative, $place)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * One line saying how many files .gitignore kept out beyond the explicit rules, broken down
+ * by where they were, so that a surprise - something that should have shipped - stands out.
+ * Those a later step would have discarded anyway are only counted, in brackets.
+ *
+ * @param list<string> $files
+ */
+function describeGitExclusions(array $files, int $discardedAnyway): string
+{
+    $anyway = $discardedAnyway === 0
+        ? ''
+        : " (not counting {$discardedAnyway} that later steps would have discarded anyway)";
+
+    if ($files === []) {
+        return ".gitignore excluded no files beyond the explicit rules{$anyway}.";
+    }
+
+    $byPlace = [];
+    foreach ($files as $file) {
+        $place = str_contains($file, '/') ? explode('/', $file)[0].'/' : $file;
+        $byPlace[$place] = ($byPlace[$place] ?? 0) + 1;
+    }
+    ksort($byPlace, SORT_STRING);
+
+    $parts = [];
+    foreach ($byPlace as $place => $count) {
+        $parts[] = "{$place} {$count}";
+    }
+
+    $noun = count($files) === 1 ? 'file' : 'files';
+
+    return '.gitignore excluded '.count($files)." {$noun} beyond the explicit rules: ".implode(', ', $parts).$anyway.'.';
 }
 
 function resetStorage(string $stage): void
@@ -543,45 +907,23 @@ function scanForSecrets(string $stage): array
 }
 
 /**
- * Run a child process, capturing its output through temporary FILES rather than pipes.
- *
- * The obvious implementation — two `['pipe','w']` descriptors and stream_get_contents() on
- * each in turn — deadlocks, and it deadlocks precisely on the command this script exists to
- * run. stream_get_contents() on stdout blocks until that stream closes; meanwhile Composer,
- * which is voluble on stderr, fills the stderr pipe's OS buffer (64KB on Windows) and blocks
- * writing. Neither side can move. The build sits there with a half-populated vendor
- * directory and no output, forever.
- *
- * Files have no buffer to fill, so the child never blocks and the parent reads once the
- * child has exited. Slower in theory; not measurable against a Composer install.
+ * Run a build step: print the command and the tail of its output, and stop the build if it
+ * fails unless $allowFailure says otherwise.
  */
 function run(string $command, string $cwd, bool $allowFailure = false): bool
 {
     line("\$ {$command}");
 
-    $stdout = tempnam(sys_get_temp_dir(), 'planvio-out');
-    $stderr = tempnam(sys_get_temp_dir(), 'planvio-err');
+    $result = capture($command, $cwd);
 
-    $descriptors = [
-        1 => ['file', $stdout, 'w'],
-        2 => ['file', $stderr, 'w'],
-    ];
-
-    $process = proc_open($command, $descriptors, $pipes, $cwd);
-
-    if (! is_resource($process)) {
-        @unlink($stdout);
-        @unlink($stderr);
+    if ($result === null) {
         $allowFailure ? line('  (could not start)') : fail("Could not run: {$command}");
 
         return false;
     }
 
-    $code = proc_close($process);
-
-    $out = (string) @file_get_contents($stdout).(string) @file_get_contents($stderr);
-    @unlink($stdout);
-    @unlink($stderr);
+    $code = $result['code'];
+    $out = $result['stdout'].$result['stderr'];
 
     foreach (array_slice(array_filter(explode("\n", trim($out))), -6) as $tail) {
         line('  '.rtrim($tail));
@@ -595,6 +937,67 @@ function run(string $command, string $cwd, bool $allowFailure = false): bool
     }
 
     return true;
+}
+
+/**
+ * Run a child process and hand back its exit code and output, printing nothing; null when
+ * the process could not be started at all.
+ *
+ * Output is captured through temporary FILES rather than pipes. The obvious implementation —
+ * two `['pipe','w']` descriptors and stream_get_contents() on each in turn — deadlocks, and
+ * it deadlocks precisely on the command this script exists to run. stream_get_contents() on
+ * stdout blocks until that stream closes; meanwhile Composer, which is voluble on stderr,
+ * fills the stderr pipe's OS buffer (64KB on Windows) and blocks writing. Neither side can
+ * move. The build sits there with a half-populated vendor directory and no output, forever.
+ *
+ * Files have no buffer to fill, so the child never blocks and the parent reads once the
+ * child has exited. Slower in theory; not measurable against a Composer install.
+ *
+ * $stdin goes in through a file as well, so there is still no pipe to manage: the child
+ * reads it at its own pace, and nothing here has to write to one stream while another
+ * fills. With null the child shares this script's input, as the build steps always have.
+ * Probes pass a string, even an empty one, so that a candidate which turns out not to be
+ * what was expected cannot sit waiting for a keyboard.
+ *
+ * @return array{code: int, stdout: string, stderr: string}|null
+ */
+function capture(string $command, string $cwd, ?string $stdin = null): ?array
+{
+    $files = [
+        'stdout' => tempnam(sys_get_temp_dir(), 'planvio-out'),
+        'stderr' => tempnam(sys_get_temp_dir(), 'planvio-err'),
+    ];
+
+    $descriptors = [
+        1 => ['file', $files['stdout'], 'w'],
+        2 => ['file', $files['stderr'], 'w'],
+    ];
+
+    if ($stdin !== null) {
+        $files['stdin'] = tempnam(sys_get_temp_dir(), 'planvio-in');
+        file_put_contents($files['stdin'], $stdin);
+        $descriptors[0] = ['file', $files['stdin'], 'r'];
+    }
+
+    $process = proc_open($command, $descriptors, $pipes, $cwd);
+
+    $result = null;
+
+    if (is_resource($process)) {
+        $code = proc_close($process);
+
+        $result = [
+            'code' => $code,
+            'stdout' => (string) @file_get_contents($files['stdout']),
+            'stderr' => (string) @file_get_contents($files['stderr']),
+        ];
+    }
+
+    foreach ($files as $file) {
+        @unlink($file);
+    }
+
+    return $result;
 }
 
 function mkdirp(string $path): void
