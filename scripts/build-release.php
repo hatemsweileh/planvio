@@ -9,7 +9,7 @@ declare(strict_types=1);
  * nothing they do not: vendor/ with production dependencies only, compiled frontend
  * assets, and no development tooling, tests, secrets or VCS metadata.
  *
- * Run from the repository root:
+ * Run it with PHP from anywhere; it finds the repository from its own location:
  *
  *     ./php scripts/build-release.php
  *     ./php scripts/build-release.php --skip-assets    (reuse an existing public/build)
@@ -42,7 +42,7 @@ line('Output         : '.realish($zipPath));
 step('Preflight');
 
 if (! is_file(ROOT.'/composer.json')) {
-    fail('composer.json not found. Run this from the repository root.');
+    fail('composer.json not found one level above scripts/. This script must sit in a Planvio checkout.');
 }
 if (! class_exists(ZipArchive::class)) {
     fail('The zip extension is required to build a release.');
@@ -75,8 +75,10 @@ rmrf($stage);
 mkdirp($stage);
 
 $excludeDirs = [
-    '.git', '.github', '.idea', '.vscode', 'node_modules', 'vendor',
+    '.git', '.hg', '.svn', '.github', '.idea', '.vscode', 'node_modules', 'vendor',
     'build', 'dist', 'tests', 'design', '.claude', 'scratchpad',
+    // Editor and tool state, as in .gitignore.
+    '.zed', '.nova', '.fleet', '.cursor', '.codex', '.phpunit.cache',
     // A working tree may hold a prepared copy of the public repository at ./github.
     // Staging it would put the whole source inside the release a second time.
     'github',
@@ -85,12 +87,19 @@ $excludeDirs = [
     'wiki', 'planvio-wiki', 'planvio.wiki',
 ];
 
+// Environment files are not in this list: copyTree() skips every `.env`, `.env.*` and the like
+// except `.env.example`, files and directories alike, because a list of names only covers the
+// names somebody thought of. See isEnvironmentFile().
 $excludeFiles = [
-    '.env', '.env.local', '.env.testing', '.env.backup',
-    'php', 'composer', 'phpunit.xml', 'pint.json',
+    'php', 'composer', 'php.bat', 'composer.bat', 'composer.phar', 'phpunit.xml', 'pint.json',
     'package-lock.json',
     '.gitignore', '.gitattributes', '.editorconfig', '.npmrc',
     '.phpunit.result.cache',
+    // Composer's credential file. .gitignore keeps it beside .env in "never commit".
+    'auth.json',
+    // IDE helpers and operating-system litter, as in .gitignore.
+    '.phpactor.json', '_ide_helper.php', '_ide_helper_models.php', '.phpstorm.meta.php',
+    '.DS_Store', 'Thumbs.db', 'Homestead.json', 'Homestead.yaml',
     // Repository furniture. Useful to somebody working ON Planvio, noise to somebody
     // running it: a customer who extracts the ZIP has no pull requests to open.
     'CONTRIBUTING.md', 'CODE_OF_CONDUCT.md', 'CHANGELOG.md',
@@ -256,8 +265,8 @@ foreach ($iterator as $item) {
 
     // No periodic close() here, deliberately. Closing is what actually writes the
     // archive, so flushing every N files rewrites everything already added and turns the
-    // whole step quadratic - measurably minutes on a 15k-file tree. libzip reads each
-    // source file as it writes it rather than holding 15k descriptors open, so the
+    // whole step quadratic - measurably minutes on a 17k-file tree. libzip reads each
+    // source file as it writes it rather than holding 17k descriptors open, so the
     // exhaustion this was guarding against does not occur.
 }
 
@@ -344,7 +353,9 @@ function copyTree(string $from, string $to, array $excludeDirs, array $excludeFi
                 $relative = str_replace('\\', '/', substr($current->getPathname(), strlen($from) + 1));
                 $top = explode('/', $relative)[0];
 
-                return ! in_array($top, $excludeDirs, true);
+                // Environment names are refused here rather than with the other files so a
+                // directory called `.env` (a Python virtualenv, say) is never walked either.
+                return ! in_array($top, $excludeDirs, true) && ! isEnvironmentFile($current->getFilename());
             },
         ),
         RecursiveIteratorIterator::SELF_FIRST,
@@ -375,14 +386,26 @@ function copyTree(string $from, string $to, array $excludeDirs, array $excludeFi
             continue;
         }
 
+        // A Vite dev server writes public/hot and removes it on exit; an interrupted one leaves
+        // it behind. Shipped, it makes every page load its assets from that dev server.
+        if ($relative === 'public/hot') {
+            continue;
+        }
+
+        // The rest of the one-off scripts .gitignore keeps out of the repository: any
+        // `*.local.php` in the root, for the same reason as seed-demo.php above.
+        if (! str_contains($relative, '/') && str_ends_with($relative, '.local.php')) {
+            continue;
+        }
+
         /*
-         * Never copy a local database, key or archive, whatever it is called or wherever it
-         * sits. The safety sweep already refuses to package these — it caught
+         * Never copy a local database, key or backup, whatever it is called or wherever it
+         * sits. The safety sweep refuses to package these too — it caught
          * database/database.sqlite on the first real run — but a guard that only fires at
          * the end means every build fails until someone edits a list by hand. This is the
-         * same rule applied early enough to be useful.
+         * same rule applied early enough to be useful. Local logs are skipped with them.
          */
-        if (preg_match('/\.(sqlite|sqlite3|db|pem|key|p12|pfx|bak)$/i', $relative) === 1) {
+        if (isSecretArtefact($relative) || str_ends_with(strtolower($relative), '.log')) {
             continue;
         }
 
@@ -485,11 +508,8 @@ function scanForSecrets(string $stage): array
 {
     $problems = [];
 
-    $forbidden = ['.env', '.env.local', '.env.testing', 'database/database.sqlite'];
-    foreach ($forbidden as $path) {
-        if (file_exists($stage.'/'.$path)) {
-            $problems[] = "forbidden file present: {$path}";
-        }
+    if (file_exists($stage.'/database/database.sqlite')) {
+        $problems[] = 'forbidden file present: database/database.sqlite';
     }
 
     $iterator = new RecursiveIteratorIterator(
@@ -504,10 +524,17 @@ function scanForSecrets(string $stage): array
         if (str_starts_with($relative, 'vendor/')) {
             continue;
         }
-        if (preg_match('/\.(sqlite|sqlite3|db|pem|key|p12|pfx)$/i', $name)) {
+        // Every segment, so a file inside a directory named like one is caught as well.
+        if (array_filter(explode('/', $relative), isEnvironmentFile(...)) !== []) {
+            $problems[] = "environment file: {$relative}";
+        }
+        if ($name === 'auth.json') {
+            $problems[] = "Composer credentials: {$relative}";
+        }
+        if (isSecretArtefact($name)) {
             $problems[] = "credential or database artefact: {$relative}";
         }
-        if ($name === '.git' || str_contains($relative, '/.git/')) {
+        if (preg_match('#(^|/)\.(git|hg|svn)(/|$)#', $relative) === 1) {
             $problems[] = "VCS metadata: {$relative}";
         }
     }
@@ -577,15 +604,50 @@ function mkdirp(string $path): void
     }
 }
 
+/**
+ * `.env` and anything named like a copy of it, except the commented template the installer
+ * starts from.
+ *
+ * A name list only covers the names somebody thought of: `.env.production` or
+ * `.env.staging` left in a working tree would otherwise be copied, pass the sweep and ship
+ * with whatever credentials it holds. So this matches `.env` followed by nothing or by `.`,
+ * `-`, `_` or `~` (`.env.production`, `.env-staging`, `.env_backup`, the editor's `.env~`),
+ * plus direnv's `.envrc`, in any letter case, since Windows and macOS file systems ignore it.
+ */
+function isEnvironmentFile(string $name): bool
+{
+    if (strcasecmp($name, '.env.example') === 0) {
+        return false;
+    }
+
+    return preg_match('/^\.env($|[.\-_~])/i', $name) === 1 || strcasecmp($name, '.envrc') === 0;
+}
+
+/**
+ * A local database (SQLite files and their journal, WAL and shared-memory companions), key
+ * material, or a backup copy.
+ */
+function isSecretArtefact(string $path): bool
+{
+    return preg_match('/\.(sqlite3?|db)(-journal|-wal|-shm)?$|\.(pem|key|p12|pfx|bak)$/i', $path) === 1;
+}
+
 function rmrf(string $path): int
 {
-    if (! file_exists($path)) {
-        return 0;
-    }
-    if (is_file($path) || is_link($path)) {
-        @unlink($path);
+    // The link test comes first. file_exists() follows a link, so it reports one whose target
+    // is already gone as absent, and the link - and with it every directory above it - would
+    // be left behind. A link can lose its target earlier in the same walk: nette/utils'
+    // tests, when Composer installs from source, hold one to a sibling file. Windows removes
+    // a link to a directory with rmdir(), not unlink().
+    if (is_link($path) || is_file($path)) {
+        if (! @unlink($path) && is_dir($path)) {
+            @rmdir($path);
+        }
 
         return 1;
+    }
+    if (! is_dir($path)) {
+        return 0;
     }
 
     $count = 0;

@@ -4,6 +4,11 @@
 /vendor
 /node_modules
 
+# A local Composer, for a machine where the release builder cannot find one
+# (see detectComposer()). The builder keeps it out of the ZIP; it is a tool,
+# not part of Planvio.
+/composer.phar
+
 # ---------------------------------------------------------------------------
 # Compiled frontend output.
 #
