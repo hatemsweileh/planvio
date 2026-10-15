@@ -931,6 +931,34 @@
     .prose-planvio hr { border-color: var(--line-subtle); margin: 2em 0; }
 }
 
+/* ---------------------------------------------------------------------------
+   Rich text editor.
+   --------------------------------------------------------------------------- */
+@layer components {
+    /*
+       TipTap's Placeholder extension does not draw the hint itself: it marks the empty
+       block with `is-editor-empty`, copies the text into `data-placeholder` and leaves the
+       rest to the stylesheet. Without this rule the hint the task drawer and the wiki pass
+       in was set on every empty editor and shown in none of them.
+
+       Floated with no height so that the caret stays at the start of the line, where the
+       first character will go, and the empty line grows no taller. `inline-start` rather
+       than the `left` of TipTap's own example because the editor is `dir="auto"`: it
+       decides which edge the caret starts from, and the hint has to be on the same one.
+       `plaintext` lets the hint order its own words, so an Arabic hint in an editor that is
+       still left-to-right keeps its closing full stop or ellipsis at the end of the sentence
+       rather than in front of it.
+    */
+    .tiptap .is-editor-empty:first-child::before {
+        content: attr(data-placeholder);
+        float: inline-start;
+        height: 0;
+        color: var(--text-subtle);
+        unicode-bidi: plaintext;
+        pointer-events: none;
+    }
+}
+
 @media print {
     .print\:hidden, nav, aside, .no-print { display: none !important; }
     body { background: #fff; color: #000; }

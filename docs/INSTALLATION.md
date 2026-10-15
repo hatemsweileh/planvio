@@ -257,7 +257,7 @@ Full instructions are in [DEVELOPMENT.md](DEVELOPMENT.md). The short version, fr
 the repository rather than a release ZIP:
 
 ```bash
-composer setup     # composer install, .env, key:generate, migrate, npm install, npm run build
+composer setup     # composer install, .env, key:generate, migrate, npm ci, npm run build
 composer dev       # runs the dev server, queue listener, log tail and Vite together
 ```
 

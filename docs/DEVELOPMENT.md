@@ -16,7 +16,7 @@ tells you how to work inside that contract, not how to redesign it.
 | PHP | 8.3 or newer. The reference development machine runs 8.4.25 |
 | Extensions | `pdo` `pdo_mysql` `mbstring` `openssl` `json` `fileinfo` `xml` `ctype` `tokenizer` `curl` `bcmath` `gd` `zip` |
 | Composer | 2.x |
-| Node | 20 or newer (22 on the reference machine), npm 10+ |
+| Node | 20 or newer (22 on the reference machine), npm 10+ to install, npm 11+ to change `package-lock.json` — see [below](#package-lockjson-is-written-with-npm-11) |
 | Database | MySQL 8 / MariaDB 10.6+, or SQLite for a quick local run |
 | Disk | ~1.5 GB with `vendor/` and `node_modules/` |
 
@@ -68,8 +68,12 @@ php vendor/bin/phpunit --testsuite=Security
 2. **Install frontend dependencies.**
 
    ```bash
-   npm install
+   npm ci
    ```
+
+   `ci`, not `install`: it installs exactly what `package-lock.json` says and never writes
+   to it, whichever npm you have. See
+   [`package-lock.json` is written with npm 11](#package-lockjson-is-written-with-npm-11).
 
 3. **Create your `.env`.**
 
@@ -1112,6 +1116,43 @@ knowing:
   together. Doing fewer than all four leaves the product claiming support it does not have.
 - `composer check-platform-reqs` reports against the PHP actually running, not against the
   pin, so it cannot answer this question. `composer why-not php 8.3` can.
+
+---
+
+## `package-lock.json` is written with npm 11
+
+Install with `npm ci`. Change the lock only with npm 11 or newer.
+
+Tailwind, Lightning CSS and Rolldown each ship their native code as a set of optional
+packages, one per operating system, CPU and C library, and the lock tells them apart by
+their `os`, `cpu` and `libc` fields. npm 11 records `libc`. npm 10 — the one Node 22 comes
+with — drops the field from every entry whenever it rewrites the lock, and a plain
+`npm install` rewrites it. Two things follow from a lock without it:
+
+- npm can no longer tell a glibc build from a musl one, so it installs both on every Linux
+  machine, CI included: on x64, about 22 MB of native binaries that nothing loads.
+- The lock stops being stable. An npm 10 run strips the field from every entry; npm 11 only
+  puts it back on the entries it happens to resolve again, so the lock ends up half one and
+  half the other, and a one-line dependency change arrives buried in dozens of lines nobody
+  meant to change.
+
+So:
+
+- **Installing** — `npm ci`. It installs exactly what the lock says, on npm 10 or 11, and
+  never writes to it. CI installs the same way, and so does `scripts/build-release.php`
+  unless `npm ci` fails: it then falls back to `npm install`, and on npm 10 the lock it
+  leaves behind has lost the field. Redo or repair it as below rather than commit it.
+- **Adding, removing or updating a package** — use npm 11. `npx npm@11 install <package>`
+  does it without replacing the npm your Node came with. Dependabot's lock updates already
+  carry the field.
+- **Reviewing** — a diff to `package-lock.json` that removes `"libc"` lines was written by
+  npm 10. Make the change again with npm 11, starting from the lock before it, rather than
+  merging it.
+- **Repairing** — npm 11 does not put the field back on an entry it already has, so a lock
+  that has lost it stays that way through any number of npm 11 runs. Delete the affected
+  entries from `package-lock.json` and run `npx npm@11 install --package-lock-only`: they
+  are resolved again at the exact versions their parent packages pin, this time with
+  `libc`, and nothing else in the lock moves.
 
 ---
 
