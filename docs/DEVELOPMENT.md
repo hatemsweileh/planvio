@@ -1119,7 +1119,10 @@ Output: `dist/planvio-v1.0.0.zip` — the version comes from
    repository from its own location, so you can run it from any directory.
 2. **Frontend assets** — runs `npm ci` (falling back to `npm install`) and `npm run build`,
    then refuses to continue unless `public/build/manifest.json` exists. A release without
-   compiled assets is useless: production has no Node.
+   compiled assets is useless: production has no Node. The stylesheet comes out the same
+   whether or not your working tree has a `vendor/`: Tailwind reads only the sources
+   `resources/css/app.css` lists, and none of them is under `vendor/`, so a release built
+   from a fresh clone ships the CSS CI built and tested.
 3. **Staging** — copies the tree into `build/staging`. It copies from the filesystem, not
    from git, so `.gitignore` protects nothing here and everything below is an explicit rule:
    - Top-level directories skipped: `.git`, `.hg`, `.svn`, `.github`, `.idea`, `.vscode`,

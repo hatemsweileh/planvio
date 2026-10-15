@@ -134,12 +134,28 @@ jobs:
           path: public/build
           retention-days: 1
 
+      # Tailwind compiles a utility only when it finds the class written in one of the
+      # sources resources/css/app.css lists, so a source dropped from that list loses its
+      # classes silently: the build still succeeds, and the screens come out unstyled. The
+      # classes below are logical-property utilities the right-to-left layout rests on, each
+      # written in several views, plus `min-h-24`, which only resources/js/app.js writes (the
+      # rich-text editor's height), so losing either source fails here.
+      #
+      # Two things keep the check honest. This file is not a Tailwind source — app.css
+      # imports Tailwind with `source(none)` — so naming a class here cannot put it in the
+      # build. Before that it could, and did: `ms-2` and `me-2` were on this list, no view
+      # used either, and they passed because Tailwind had found them here. And the match is
+      # on the compiled rule, `.ms-auto{` (or `.ms-auto,` where rules are merged), not on a
+      # substring: `border-s` on its own is found inside `--tw-border-style`, which every
+      # Tailwind build contains, and `text-end` inside `.sm\:text-end`, a different utility
+      # that one view happens to use. A class with a dot or a slash in it would need
+      # escaping in the pattern; these have none.
       - name: Fail if a Tailwind class was lost
         run: |
           CSS=$(find public/build/assets -name '*.css' | head -1)
           echo "Checking $CSS"
-          for class in "ms-2" "me-2" "ps-3" "pe-3" "border-s" "border-e" "text-start" "text-end"; do
-            grep -q -- "$class" "$CSS" || { echo "::error::missing utility: $class"; exit 1; }
+          for class in "ms-auto" "-me-1" "ps-3" "pe-1" "border-s" "border-e" "text-start" "text-end" "min-h-24"; do
+            grep -qE -- "\.${class}[{,]" "$CSS" || { echo "::error::missing utility: $class"; exit 1; }
           done
           grep -q "noto-sans-arabic" "$CSS" || { echo "::error::Arabic font face missing"; exit 1; }
           echo "All checked utilities present."

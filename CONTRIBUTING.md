@@ -117,6 +117,11 @@ Never build a Tailwind class by interpolation. Tailwind scans source text and ne
 evaluates it, so `"ms-{{ $n }}"` compiles to nothing at all. Put the full class names in a
 PHP array and select from it.
 
+It scans only the directories `resources/css/app.css` lists — `resources/views`,
+`resources/js`, `app/Livewire` and `app/Support` — and nothing under `vendor/`. A class
+written anywhere else compiles to nothing until its directory is added to that list, and a
+class named only in documentation, a test or a workflow is, correctly, not in the build.
+
 ---
 
 ## Conventions

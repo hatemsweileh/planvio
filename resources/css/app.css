@@ -1,7 +1,33 @@
-@import 'tailwindcss';
+@import 'tailwindcss' source(none);
 
 /*
-   Sources are the Blade and PHP that class names are written in, and nothing else.
+   Sources are the Blade, PHP and JavaScript that class names are written in, and nothing
+   else: the four directories listed below, and only those.
+
+   `source(none)` is what makes that so. Without it Tailwind also goes looking for sources
+   on its own — the whole project, bar what git ignores — and generates a utility for every
+   word it finds that happens to spell one. The documentation was a source (`text-3xl` from
+   a table in docs/LOCALISATION.md, `text-right` from the contributing guide's line telling
+   you never to use it), so were the tests, and so was .github/workflows/ci.yml, whose check
+   that the right-to-left utilities survived the build named `ms-2` and `me-2`, which no
+   view uses. Tailwind found them in the check itself, so the check could not fail. A class
+   Planvio emits is written in one of the places below; a word anywhere else is prose, and
+   has no business in the stylesheet.
+
+   Nothing under vendor/ is listed, so the stylesheet comes out the same bytes whether or
+   not `composer install` has run in the tree that builds it. Laravel's pagination views
+   used to be listed, and that made it differ: CI builds the assets with no vendor/, the
+   working tree a release is built from usually has one, and the two shipped different CSS.
+   The extra rules styled a pager Planvio never renders — no view calls `->links()`, and
+   every paginated screen draws its own, with components/ui/pagination.blade.php or a plain
+   previous and next pair — so one build carried dead weight the other did not.
+
+   resources/js is listed because the rich-text editor puts classes on the element TipTap
+   creates, and one of them, `min-h-24`, is written nowhere else. app/Livewire and
+   app/Support are the PHP half of the views: a component or a helper that has to choose a
+   class writes it out in full, as the views do, and is scanned for it. A class written
+   anywhere else — a new directory under app/, a config file — compiles to nothing until
+   its directory is added to this list.
 
    The compiled-view cache (storage/framework/views) is deliberately NOT scanned. It is
    generated, gitignored, and holds whatever happened to be rendered last, so scanning it
@@ -13,9 +39,9 @@
    the sources below, which is the only way Tailwind can see a class in the first place.
    */
 @source '../views';
+@source '../js';
 @source '../../app/Livewire';
 @source '../../app/Support';
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
