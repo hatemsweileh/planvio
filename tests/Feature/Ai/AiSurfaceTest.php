@@ -63,6 +63,12 @@ final class AiSurfaceTest extends TestCase
     {
         parent::setUp();
 
+        // The installation's master switch is opened here rather than inherited (see
+        // phpunit.xml). AiGate asks it before anything else, so with it off every send below
+        // would be refused and the workspace's own refusal would never be the one on screen.
+        // The installation with AI switched off has a test of its own.
+        config(['ai.enabled' => true]);
+
         $this->workspace = $this->makeWorkspace(['timezone' => 'UTC']);
         $this->actor = $this->makeMember($this->workspace, WorkspaceRole::Owner);
     }
@@ -222,6 +228,43 @@ final class AiSurfaceTest extends TestCase
             ->set('draft', 'Do something useful.')
             ->call('send')
             ->assertSet('draft', 'Do something useful.');
+
+        $this->assertSame(0, AiConversation::withoutWorkspaceScope()->count());
+        $this->assertSame(0, AiMessage::query()->count());
+        $this->assertSame(0, AiRun::withoutWorkspaceScope()->count());
+
+        Queue::assertNothingPushed();
+    }
+
+    /**
+     * The same promise one tier further out. AI_ENABLED=false is what a fresh installation
+     * ships with, and a workspace an administrator configured completely beforehand must still
+     * open, say why nothing will happen — the installation's reason, which outranks the
+     * workspace's own — and write nothing from either the full screen or the drawer.
+     */
+    #[Test]
+    public function an_installation_with_ai_switched_off_shows_the_disabled_state_and_creates_nothing(): void
+    {
+        Queue::fake();
+        $this->enableAi();
+
+        config(['ai.enabled' => false]);
+
+        $this->actingInWorkspace($this->actor, $this->workspace);
+
+        $this->get(route('app.ai', $this->workspace))
+            ->assertOk()
+            ->assertSee(__('ai.gate.disabled_globally'));
+
+        Livewire::test(AiWorkspace::class, ['workspace' => $this->workspace])
+            ->assertSee(__('ai.gate.disabled_globally'))
+            ->set('draft', 'Do something useful.')
+            ->call('send')
+            ->assertSet('draft', 'Do something useful.');
+
+        Livewire::test(Panel::class)
+            ->call('begin', null, null, '', 'review')
+            ->assertSet('refusal', __('ai.gate.disabled_globally'));
 
         $this->assertSame(0, AiConversation::withoutWorkspaceScope()->count());
         $this->assertSame(0, AiMessage::query()->count());

@@ -50,6 +50,17 @@ final class AiApprovalFidelityTest extends TestCase
 
     private Project $project;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // The agent loop refuses to start, and an approval refuses to resume it, while the
+        // installation's master switch is off: with AI off no tool call would ever be parked.
+        // So these tests open it themselves rather than inherit it (see phpunit.xml), the way
+        // tests/Feature/Ai/AgentRunnerTest.php does.
+        config(['ai.enabled' => true]);
+    }
+
     /**
      * Long enough to be truncated by the storage cap, and carrying a string the shape
      * scrubber will rewrite. Both would corrupt the approved task.

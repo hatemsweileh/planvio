@@ -733,11 +733,16 @@ final class ContextIsolationTest extends TestCase
      * A settings row that genuinely resolves to autonomous mode.
      *
      * `AiSetting::effectiveMode()` degrades to copilot unless the workspace is enabled, the
-     * kill switch is clear and an ACTIVE provider is attached — so a made-up row would make
-     * an approval assertion pass for the wrong reason.
+     * kill switch is clear, an ACTIVE provider is attached and the installation's master switch
+     * is open — so a made-up row would make an approval assertion pass for the wrong reason.
+     *
+     * The master switch is opened here rather than inherited (see phpunit.xml). Only the
+     * policy tests come through this helper, so only they depend on it.
      */
     private function autonomousSettings(Workspace $workspace): AiSetting
     {
+        config(['ai.enabled' => true]);
+
         $settings = AiSetting::factory()->create([
             'workspace_id' => $workspace->id,
             'is_enabled' => true,

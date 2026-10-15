@@ -59,6 +59,12 @@
             AI is enabled in tests so the tool registry, policy engine and agent loop are
             exercised, but no provider is configured: every test that reaches the network
             must use a faked HTTP client. A real outbound call in the suite is a bug.
+
+            This is a default, not a guarantee. Without force="true" an AI_ENABLED already in
+            the process environment wins over this entry, and Planvio itself ships with AI off,
+            so a test whose outcome depends on the master switch sets config('ai.enabled')
+            itself. CI runs the whole suite a second time with AI_ENABLED=false to hold every
+            test to that.
         -->
         <env name="AI_ENABLED" value="true"/>
         <env name="AI_AUTOMATIONS_ENABLED" value="false"/>

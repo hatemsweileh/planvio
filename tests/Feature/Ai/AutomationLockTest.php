@@ -49,6 +49,12 @@ final class AutomationLockTest extends TestCase
         // phpunit.xml ships AI_AUTOMATIONS_ENABLED=false so nothing schedules itself by
         // accident. These tests are about the scheduler, so they turn it on deliberately.
         config()->set('ai.automations.enabled', true);
+
+        // The installation's master switch sits above that one and is opened just as
+        // deliberately, rather than inherited (see phpunit.xml). With it off, every tick meant
+        // to start a run would start nothing, and the kill-switch and workspace-switch tests
+        // would pass for the wrong reason.
+        config()->set('ai.enabled', true);
     }
 
     /* ------------------------------------------------------------------ *
@@ -245,6 +251,41 @@ final class AutomationLockTest extends TestCase
         $this->assertTrue($runner->due()->isEmpty());
         $this->assertSame(0, $runner->runDue());
         $this->assertSame(0, AiRun::withoutWorkspaceScope()->count());
+    }
+
+    /**
+     * AI_ENABLED=false is what a fresh installation ships with, so this is the tick most
+     * installations actually run. It starts nothing for a workspace that has everything else
+     * switched on, and it neither claims nor fails the automation: turning AI off for the
+     * installation pauses a schedule. Counting a failure on every tick instead would soon
+     * reach `disable_after_consecutive_failures` and switch the automation off for good,
+     * leaving somebody to find and re-enable each one once AI was back.
+     */
+    #[Test]
+    public function the_installation_switch_off_starts_nothing_and_leaves_the_automation_untouched(): void
+    {
+        [$workspace, $owner] = $this->workspaceUsingAi();
+        $automation = $this->dueAutomation($workspace, $owner);
+
+        config()->set('ai.enabled', false);
+
+        $starter = $this->recordingStarter();
+        $runner = $this->runner();
+
+        $this->assertSame(0, $runner->runDue());
+        $this->assertSame([], $starter->started);
+        $this->assertSame(0, AiRun::withoutWorkspaceScope()->count());
+
+        $stored = $this->reload($automation);
+
+        $this->assertNull($stored->lock_token);
+        $this->assertSame(0, (int) $stored->failure_count);
+        $this->assertTrue((bool) $stored->is_active);
+
+        config()->set('ai.enabled', true);
+
+        $this->assertSame(1, $runner->runDue(), 'The automation did not resume once AI was back on.');
+        $this->assertCount(1, $starter->started);
     }
 
     #[Test]

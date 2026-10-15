@@ -44,6 +44,11 @@ final class AiRunTest extends ApiTestCase
     {
         parent::setUp();
 
+        // The installation's master switch is opened here rather than inherited (see
+        // phpunit.xml). With it off, every run below would answer 409, and the one test that
+        // switches it off on purpose would prove nothing by passing.
+        config(['ai.enabled' => true]);
+
         $this->workspace = $this->makeWorkspace(['slug' => 'acme']);
         $this->owner = $this->makeMember($this->workspace, WorkspaceRole::Owner);
         $this->member = $this->makeMember($this->workspace, WorkspaceRole::Member);
