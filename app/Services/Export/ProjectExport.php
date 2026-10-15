@@ -81,10 +81,16 @@ final class ProjectExport implements CsvExport
                 'tasks',
                 'tasks as tasks_completed_count' => static fn (Builder $q): Builder => $q->whereNotNull('tasks.completed_at'),
             ])
-            ->orderBy('projects.name');
+            ->orderBy('projects.name')
+            ->orderBy('projects.id');
 
         // A workspace holds projects in the hundreds, not the millions, so chunked paging
         // is cheap and the alphabetical order the screen shows is worth keeping.
+        //
+        // The id is the tiebreak, and paging needs it. `lazy()` pages with LIMIT and OFFSET,
+        // and project names are not unique: without a unique last sort key, MySQL and
+        // MariaDB may order equal names differently in each page's query, so a project
+        // whose name repeats across a 200-row boundary could be exported twice or not at all.
         foreach ($query->lazy(200) as $project) {
             yield $this->row($project);
         }

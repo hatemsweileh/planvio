@@ -254,7 +254,9 @@ final class TaskExport implements CsvExport
         }
 
         /** @var list<int> $ids */
-        $ids = $query->orderBy('projects.name')->pluck('projects.id')->map(intval(...))->all();
+        // The id breaks ties between projects with the same name, so the file comes out in the
+        // same order however the database happens to sort equal names.
+        $ids = $query->orderBy('projects.name')->orderBy('projects.id')->pluck('projects.id')->map(intval(...))->all();
 
         return $this->projectIds = $ids;
     }

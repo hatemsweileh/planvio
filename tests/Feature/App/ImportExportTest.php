@@ -24,8 +24,10 @@ use App\Services\Import\ImportProgressStore;
 use App\Services\Import\ImportSpec;
 use App\Services\Import\TaskImporter;
 use App\Support\CurrentWorkspace;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -526,6 +528,59 @@ A-1,Something
         $this->assertSame(
             array_map(static fn (int $number): string => 'WEB-'.$number, range(1, $tasks)),
             array_column(iterator_to_array($csv->getRecords(), false), 'Key'),
+        );
+    }
+
+    #[Test]
+    public function projects_that_share_a_name_across_a_page_boundary_each_export_once(): void
+    {
+        // The project export pages 200 at a time with LIMIT and OFFSET, ordered by name.
+        // Equal names need a unique tiebreak or MySQL and MariaDB may order them differently
+        // in each page's query. SQLite keeps them in one order, so here the rows alone cannot
+        // show that; the test checks each paged query carries the tiebreak, then the order it
+        // promises. 300 is enough for the row check to catch it on MySQL as well.
+        $projects = 300;
+
+        for ($i = 1; $i <= $projects; $i++) {
+            $this->makeProject($this->workspace, [], [
+                'name' => 'Same name',
+                'key' => sprintf('S%03d', $i),
+                'slug' => 'same-name-'.$i,
+            ]);
+        }
+
+        // Built with the connection's own grammar, so the identifiers are quoted the way the
+        // database the suite runs on quotes them.
+        $grammar = DB::connection()->getQueryGrammar();
+        $fromProjects = 'from '.$grammar->wrapTable('projects').' ';
+        $tiebreak = sprintf('order by %s asc, %s asc', $grammar->wrap('projects.name'), $grammar->wrap('projects.id'));
+
+        $pages = [];
+        DB::listen(static function (QueryExecuted $query) use (&$pages, $fromProjects): void {
+            if (str_contains($query->sql, $fromProjects) && preg_match('/ limit \d+ offset \d+$/i', $query->sql) === 1) {
+                $pages[] = $query->sql;
+            }
+        });
+
+        $csv = Reader::fromString(ltrim($this->download('projects'), "\xEF\xBB\xBF"));
+        $csv->setHeaderOffset(0);
+
+        $this->assertCount(2, $pages);
+        foreach ($pages as $sql) {
+            $this->assertStringContainsString($tiebreak, $sql);
+        }
+
+        $keys = array_column(
+            array_filter(
+                iterator_to_array($csv->getRecords(), false),
+                static fn (array $row): bool => $row['Name'] === 'Same name',
+            ),
+            'Key',
+        );
+
+        $this->assertSame(
+            array_map(static fn (int $number): string => sprintf('S%03d', $number), range(1, $projects)),
+            array_values($keys),
         );
     }
 
