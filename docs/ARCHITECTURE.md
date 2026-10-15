@@ -809,6 +809,8 @@ without affecting assistant/copilot use.
 
 Brand (from `design/`): primary `#3F66B0`, ink `#0E1420`, paper `#F0EFEF`.
 Tailwind 4 CSS-first config in `resources/css/app.css` via `@theme`.
+Class sources are explicit there (`source(none)` plus `@source`): `resources/views`,
+`resources/js`, `app/Livewire`, `app/Support`. Nothing under `vendor/` is scanned.
 Tokens: `--color-brand-{50..950}`, `--color-surface`, `--color-muted`, `--color-line`.
 Dark mode via `class` strategy on `<html>`; three-state (light/dark/system).
 Radius scale: `sm .375rem`, `DEFAULT .5rem`, `lg .75rem`, `xl 1rem`.
