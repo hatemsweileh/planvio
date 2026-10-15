@@ -1250,10 +1250,6 @@ pointing at `storage/app/private`, or change the config key — but the `attachm
 column defaults to `'private'` in §5.6, so adding the disk is the change that matches the
 contract.
 
-**`routes/web.php` is still the Laravel welcome closure**, and `routes/console.php` has no
-schedule registered. There is no `/install`, no `/w/{workspace}`, no `/api/v1`. A
-consequence worth knowing: `php artisan route:cache` fails while a closure route exists.
-
 **No static analysis, and `--parallel` is unproven.** There is no PHPStan or Psalm
 configuration, and `php artisan test --parallel` has not been exercised against the current
 suite — several tests write into `public/` or hold a database lock, so assume it needs work
