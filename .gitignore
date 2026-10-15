@@ -4,8 +4,9 @@
 /vendor
 /node_modules
 
-# A local Composer for a machine without one on the PATH. The release builder
-# finds it here and keeps it out of the ZIP; it is a tool, not part of Planvio.
+# A local Composer, for a machine where the release builder cannot find one
+# (see detectComposer()). The builder keeps it out of the ZIP; it is a tool,
+# not part of Planvio.
 /composer.phar
 
 # ---------------------------------------------------------------------------

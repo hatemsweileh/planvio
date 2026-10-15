@@ -1112,18 +1112,27 @@ Output: `dist/planvio-v1.0.0.zip` — the version comes from
    compiled assets is useless: production has no Node.
 3. **Staging** — copies the tree into `build/staging`. It copies from the filesystem, not
    from git, so `.gitignore` protects nothing here and everything below is an explicit rule:
-   - Top-level directories skipped: `.git`, `.github`, `.idea`, `.vscode`, `node_modules`,
-     `vendor`, `build`, `dist`, `tests`, `design`, `.claude`, `scratchpad`, `github`, `wiki`,
-     `planvio-wiki` and `planvio.wiki`.
-   - Files skipped by name, at any depth: `php`, `composer`, `composer.phar`, `phpunit.xml`,
-     `pint.json`, `package-lock.json`, `.gitignore`, `.gitattributes`, `.editorconfig`,
-     `.npmrc`, `.phpunit.result.cache`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
-     `CHANGELOG.md`, `CLAUDE.md`, `AGENTS.md` and `seed-demo.php`.
-   - **Every environment file**: `.env` and any `.env.<anything>` (`.env.production`,
-     `.env.staging`, ...), at any depth. Only `.env.example` ships, because it is the
-     template the installer starts from.
+   - Top-level directories skipped: `.git`, `.hg`, `.svn`, `.github`, `.idea`, `.vscode`,
+     `.zed`, `.nova`, `.fleet`, `.cursor`, `.codex`, `.claude`, `.phpunit.cache`,
+     `node_modules`, `vendor`, `build`, `dist`, `tests`, `design`, `scratchpad`, `github`,
+     `wiki`, `planvio-wiki` and `planvio.wiki`.
+   - Files skipped by name, at any depth: `php`, `composer`, `php.bat`, `composer.bat`,
+     `composer.phar`, `auth.json` (Composer's credentials), `phpunit.xml`, `pint.json`,
+     `package-lock.json`, `.gitignore`, `.gitattributes`, `.editorconfig`, `.npmrc`,
+     `.phpunit.result.cache`, `.phpactor.json`, `_ide_helper.php`, `_ide_helper_models.php`,
+     `.phpstorm.meta.php`, `.DS_Store`, `Thumbs.db`, `Homestead.json`, `Homestead.yaml`,
+     `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`, `CLAUDE.md`, `AGENTS.md` and
+     `seed-demo.php`.
+   - **Every environment file or directory**, at any depth and in any letter case: `.env`,
+     and `.env` followed by `.`, `-`, `_` or `~` (`.env.production`, `.env-staging`,
+     `.env_backup`, an editor's `.env~`), plus direnv's `.envrc`. Only `.env.example` ships,
+     because it is the template the installer starts from.
+   - `public/hot`, which an interrupted `npm run dev` leaves behind and which would make
+     production load its assets from a dev server.
    - Any `*.local.php` in the root: one-off maintenance scripts, as in `.gitignore`.
-   - Any file ending `.sqlite`, `.sqlite3`, `.db`, `.pem`, `.key`, `.p12`, `.pfx` or `.bak`.
+   - Local databases, key material, backups and logs: any file ending `.sqlite`, `.sqlite3`
+     or `.db` (with or without a `-journal`, `-wal` or `-shm` suffix), `.pem`, `.key`,
+     `.p12`, `.pfx`, `.bak` or `.log`.
    - Symbolic links. The one a working tree usually has is `public/storage`, which points
      at an absolute path on your machine; the installer creates the real one on the server.
 
@@ -1159,10 +1168,10 @@ Output: `dist/planvio-v1.0.0.zip` — the version comes from
    purpose: deeper, and it would start deleting directories that packages genuinely ship as
    source.
 8. **Safety sweep** — outside `vendor/`, refuses to package if the staging tree contains
-   any environment file other than `.env.example`, `database/database.sqlite` or any other
-   `.sqlite` / `.sqlite3` / `.db` file, a `.pem` / `.key` / `.p12` / `.pfx`, or any VCS
-   metadata. It is the same rule as the copy step, checked again at the end, so a file that
-   reaches staging some other way is still caught. Then it checks that
+   an environment file (or anything inside a directory named like one), an `auth.json`, a
+   local database, key or backup by the extensions above, or `.git`, `.hg` or `.svn`
+   metadata. These are the copy step's rules for secrets, checked again at the end, so a
+   file that reaches staging some other way is still caught. Then it checks that
    `public/index.php`, `public/.htaccess`, `.htaccess`, `artisan`,
    `public/build/manifest.json`, `config/planvio.php`, `config/ai.php` and
    `bootstrap/app.php` are all present.
