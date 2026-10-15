@@ -85,9 +85,11 @@ $excludeDirs = [
     'wiki', 'planvio-wiki', 'planvio.wiki',
 ];
 
+// Environment files are not in this list: copyTree() skips every `.env` and `.env.*` except
+// `.env.example`, whatever the suffix, because a list of names only covers the names somebody
+// thought of. See isEnvironmentFile().
 $excludeFiles = [
-    '.env', '.env.local', '.env.testing', '.env.backup',
-    'php', 'composer', 'phpunit.xml', 'pint.json',
+    'php', 'composer', 'composer.phar', 'phpunit.xml', 'pint.json',
     'package-lock.json',
     '.gitignore', '.gitattributes', '.editorconfig', '.npmrc',
     '.phpunit.result.cache',
@@ -371,7 +373,13 @@ function copyTree(string $from, string $to, array $excludeDirs, array $excludeFi
             continue;
         }
 
-        if (in_array(basename($relative), $excludeFiles, true)) {
+        if (in_array(basename($relative), $excludeFiles, true) || isEnvironmentFile(basename($relative))) {
+            continue;
+        }
+
+        // The rest of the one-off scripts .gitignore keeps out of the repository: any
+        // `*.local.php` in the root, for the same reason as seed-demo.php above.
+        if (! str_contains($relative, '/') && str_ends_with($relative, '.local.php')) {
             continue;
         }
 
@@ -485,11 +493,8 @@ function scanForSecrets(string $stage): array
 {
     $problems = [];
 
-    $forbidden = ['.env', '.env.local', '.env.testing', 'database/database.sqlite'];
-    foreach ($forbidden as $path) {
-        if (file_exists($stage.'/'.$path)) {
-            $problems[] = "forbidden file present: {$path}";
-        }
+    if (file_exists($stage.'/database/database.sqlite')) {
+        $problems[] = 'forbidden file present: database/database.sqlite';
     }
 
     $iterator = new RecursiveIteratorIterator(
@@ -503,6 +508,9 @@ function scanForSecrets(string $stage): array
 
         if (str_starts_with($relative, 'vendor/')) {
             continue;
+        }
+        if (isEnvironmentFile($name)) {
+            $problems[] = "environment file: {$relative}";
         }
         if (preg_match('/\.(sqlite|sqlite3|db|pem|key|p12|pfx)$/i', $name)) {
             $problems[] = "credential or database artefact: {$relative}";
@@ -577,15 +585,30 @@ function mkdirp(string $path): void
     }
 }
 
+/**
+ * `.env` and every `.env.<anything>` except the commented template the installer starts from.
+ *
+ * A name list only covers the names somebody thought of: `.env.production` or
+ * `.env.staging` left in a working tree would otherwise be copied, pass the sweep and ship
+ * with whatever credentials it holds.
+ */
+function isEnvironmentFile(string $name): bool
+{
+    return $name === '.env' || (str_starts_with($name, '.env.') && $name !== '.env.example');
+}
+
 function rmrf(string $path): int
 {
-    if (! file_exists($path)) {
-        return 0;
-    }
-    if (is_file($path) || is_link($path)) {
+    // The link test comes first. file_exists() follows a link, so it reports a dangling one
+    // as absent, and the link - and with it every directory above it - would be left behind.
+    // nette/utils ships such a link in its tests, which is how trimVendor() found this.
+    if (is_link($path) || is_file($path)) {
         @unlink($path);
 
         return 1;
+    }
+    if (! is_dir($path)) {
+        return 0;
     }
 
     $count = 0;

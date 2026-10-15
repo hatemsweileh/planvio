@@ -1104,19 +1104,34 @@ Output: `dist/planvio-v1.0.0.zip` — the version comes from
 
 ### What it does, in order
 
-1. **Preflight** — checks you are at the repository root and that the `zip` extension is
-   loaded.
+1. **Preflight** — checks that the script sits in a Planvio checkout (`composer.json` one
+   level above `scripts/`) and that the `zip` extension is loaded. It works out the
+   repository from its own location, so you can run it from any directory.
 2. **Frontend assets** — runs `npm ci` (falling back to `npm install`) and `npm run build`,
    then refuses to continue unless `public/build/manifest.json` exists. A release without
    compiled assets is useless: production has no Node.
-3. **Staging** — copies the tree into `build/staging`, skipping the directories `.git`,
-   `.github`, `.idea`, `.vscode`, `node_modules`, `vendor`, `build`, `dist`, `tests`,
-   `design`, `.claude`, `scratchpad` and `github`, and skipping the files `.env*`, `php`,
-   `composer`, `phpunit.xml`, `pint.json`, `package-lock.json`, `.gitignore`,
-   `.gitattributes`, `.editorconfig`, `.npmrc`, `.phpunit.result.cache`,
-   `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`, `CLAUDE.md` and `AGENTS.md`.
+3. **Staging** — copies the tree into `build/staging`. It copies from the filesystem, not
+   from git, so `.gitignore` protects nothing here and everything below is an explicit rule:
+   - Top-level directories skipped: `.git`, `.github`, `.idea`, `.vscode`, `node_modules`,
+     `vendor`, `build`, `dist`, `tests`, `design`, `.claude`, `scratchpad`, `github`, `wiki`,
+     `planvio-wiki` and `planvio.wiki`.
+   - Files skipped by name, at any depth: `php`, `composer`, `composer.phar`, `phpunit.xml`,
+     `pint.json`, `package-lock.json`, `.gitignore`, `.gitattributes`, `.editorconfig`,
+     `.npmrc`, `.phpunit.result.cache`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
+     `CHANGELOG.md`, `CLAUDE.md`, `AGENTS.md` and `seed-demo.php`.
+   - **Every environment file**: `.env` and any `.env.<anything>` (`.env.production`,
+     `.env.staging`, ...), at any depth. Only `.env.example` ships, because it is the
+     template the installer starts from.
+   - Any `*.local.php` in the root: one-off maintenance scripts, as in `.gitignore`.
+   - Any file ending `.sqlite`, `.sqlite3`, `.db`, `.pem`, `.key`, `.p12`, `.pfx` or `.bak`.
+   - Symbolic links. The one a working tree usually has is `public/storage`, which points
+     at an absolute path on your machine; the installer creates the real one on the server.
 
-   Two of those are easy to get wrong. `github` is where a working tree may hold a prepared
+   After copying it also deletes `resources/views/dev` (the design gallery) and anything in
+   `public/` whose name starts with `_` (what that gallery and the localisation reviews
+   render).
+
+   Two of the skips are easy to get wrong. `github` is where a working tree may hold a prepared
    copy of the repository itself, so staging it would put the whole source inside the
    release a second time. And the repository furniture — the contributing guide, the code of
    conduct, the changelog — is useful to somebody working *on* Planvio and noise to somebody
@@ -1124,7 +1139,8 @@ Output: `dist/planvio-v1.0.0.zip` — the version comes from
 4. **Storage reset** — deletes the copied `storage/` and rebuilds it as an empty skeleton
    (`app/private`, `app/public`, `framework/{cache/data,sessions,testing,views}`, `logs`),
    then rewrites `storage/.htaccess` and `storage/app/.htaccess` with the deny-and-
-   don't-execute guard. Your local logs, sessions and uploads never ship.
+   don't-execute guard, and empties `bootstrap/cache` down to its `.gitignore`. Your local
+   logs, sessions, uploads and cached manifests never ship.
 5. **Production dependencies** — runs
    `composer install --no-dev --optimize-autoloader --classmap-authoritative --no-scripts`
    **inside the staging directory**, so your working tree keeps its dev dependencies and
@@ -1142,14 +1158,18 @@ Output: `dist/planvio-v1.0.0.zip` — the version comes from
    config files from each `vendor/<org>/<package>`. It only goes two levels deep on
    purpose: deeper, and it would start deleting directories that packages genuinely ship as
    source.
-8. **Safety sweep** — refuses to package if the staging tree contains a `.env`, a SQLite
-   file, a `.pem` / `.key` / `.p12` / `.pfx`, or any VCS metadata. Then it checks that
+8. **Safety sweep** — outside `vendor/`, refuses to package if the staging tree contains
+   any environment file other than `.env.example`, `database/database.sqlite` or any other
+   `.sqlite` / `.sqlite3` / `.db` file, a `.pem` / `.key` / `.p12` / `.pfx`, or any VCS
+   metadata. It is the same rule as the copy step, checked again at the end, so a file that
+   reaches staging some other way is still caught. Then it checks that
    `public/index.php`, `public/.htaccess`, `.htaccess`, `artisan`,
    `public/build/manifest.json`, `config/planvio.php`, `config/ai.php` and
    `bootstrap/app.php` are all present.
-9. **Archive** — writes the ZIP, reopening the archive every 2,000 entries because a full
-   Laravel + Filament tree is around 15,000 files and holding every handle open exhausts
-   the descriptor limit on some machines.
+9. **Archive** — adds every staged file to the ZIP in one pass and closes it once. Closing
+   is what actually writes the archive, so it is not flushed along the way: doing that
+   rewrites everything already added and made the step quadratic on a tree of about 17,000
+   files.
 10. **Report** — prints the path, entry count, size and SHA-256. Publish that hash with the
    release.
 
@@ -1165,8 +1185,8 @@ Output: `dist/planvio-v1.0.0.zip` — the version comes from
 
 `detectComposer()` looks in this order: `C:/tools/composer/composer.phar`,
 `<repo>/composer.phar`, `/usr/local/bin/composer`. If yours is somewhere else, drop a
-`composer.phar` in the repository root — that is the portable option and it is already
-ignored by the build's own exclusion list.
+`composer.phar` in the repository root — that is the portable option. It is ignored by
+git, and the build's exclusion list keeps it out of the release.
 
 ### Before you ship a build
 
