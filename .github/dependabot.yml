@@ -5,6 +5,15 @@ updates:
   # execute new code over the network is a supply-chain risk in a product whose premise is
   # that you host it yourself. So patching happens here, in the open, and reaches people as
   # a release.
+  #
+  # Two rules shape every `groups` block below. GitHub documents that Dependabot puts an
+  # update in the first group whose rules it matches, and that an update matching no group
+  # gets a pull request of its own. So in each ecosystem the named families come first and
+  # the `*` catch-all comes last, where it can only collect what the families leave. And
+  # groups cover version updates only (the default when `applies-to` is left out), which is
+  # what we want here: with grouped security updates left off in the repository settings,
+  # a security update still arrives on its own, as soon as the advisory is out, and can be
+  # merged without waiting for the week's routine bumps or being rebased past them.
   - package-ecosystem: composer
     directory: /
     schedule:
@@ -13,16 +22,43 @@ updates:
     open-pull-requests-limit: 5
     labels: [dependencies, php]
     groups:
-      # One pull request per framework family. Laravel, Filament and Livewire release in
-      # lockstep often enough that separate bumps just conflict with each other.
-      laravel:
-        patterns: ['laravel/*', 'illuminate/*']
-      filament:
-        patterns: ['filament/*']
-      livewire:
-        patterns: ['livewire/*']
-      symfony:
-        patterns: ['symfony/*']
+      # One pull request for the framework stack. Laravel, Filament and Livewire release in
+      # lockstep often enough that separate bumps just conflict with each other, and that
+      # turned out to hold between the families as much as within them. These used to be
+      # four groups, one per family, but when Dependabot updates filament/filament it lets
+      # Composer move everything Filament depends on, and that includes laravel/framework
+      # (it provides the illuminate/* packages Filament requires), Livewire and much of
+      # Symfony. So every Filament pull request carried the very laravel/framework bump that
+      # the Laravel pull request opened the same morning was for, under a title that named
+      # only Filament: the same change reviewed twice, and no way to hold Laravel back by
+      # leaving its pull request open, because the Filament one brought it in anyway. One
+      # group says what it changes, and rewrites composer.lock once a week, not twice.
+      #
+      # Nothing under livewire/* or symfony/* is required directly today (both arrive
+      # through the packages above), so those two patterns match nothing yet. They stay so
+      # that requiring one directly later puts it with the framework it moves with, rather
+      # than in a pull request of its own that would overlap this one.
+      #
+      # Minor and patch only. A major here, a new Laravel or a new Filament, is a migration
+      # with an upgrade guide rather than a bump, and inside a shared group it would hold
+      # the routine patch releases (security fixes among them) back until that migration
+      # was done, so a major gets a pull request of its own. The limit applies to the
+      # packages required here, not to what Composer moves along with them: a transitive
+      # dependency can still go up a major inside a minor bump, so read the lock file diff,
+      # not just the title.
+      framework:
+        patterns: ['laravel/*', 'illuminate/*', 'filament/*', 'livewire/*', 'symfony/*']
+        update-types: [minor, patch]
+      # Then every other minor and patch release in one pull request: the leaf libraries
+      # (HTML Purifier, the CSV, QR code and one-time password libraries) and test helpers
+      # such as Faker and Mockery. Raised one by one, a week of quiet patch releases is
+      # that many pull requests, CI runs and composer.lock rewrites for one routine review.
+      # These share almost nothing with the framework's dependency tree, so this group
+      # seldom touches the same part of the lock file as the one above. Majors stay
+      # individual, for the same reason as there.
+      composer-minor-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
 
   - package-ecosystem: npm
     directory: /
@@ -32,13 +68,40 @@ updates:
     open-pull-requests-limit: 5
     labels: [dependencies, javascript]
     groups:
+      # The families first, with every update type, majors included. The @tiptap/* packages
+      # pin one another to their own exact version, and @tailwindcss/vite pins tailwindcss
+      # the same way, so each family has to move as one whatever the size of the step.
       tiptap:
         patterns: ['@tiptap/*']
       tailwind:
         patterns: ['tailwindcss', '@tailwindcss/*']
+      # Then every other minor and patch release in one pull request. Each of these bumps a
+      # range in package.json, and package-lock.json repeats package.json in its root entry,
+      # so separate pull requests opened the same Monday all rewrite the same few lines at
+      # the top of the lock file. One week three of them did, and merging the first sent
+      # Dependabot back to rebase the other two before either could go in. Majors stay out
+      # of the group and get a pull request each: a new major of Vite, or of anything else
+      # in the build, is a change to read on its own, not one to wave through alongside a
+      # patch release. Dependabot decides whether a package belongs here from its newest
+      # release, so one with a new major out leaves the group altogether, and while that
+      # major cannot be installed (a Vite major before laravel-vite-plugin accepts it, say)
+      # its minor and patch releases come in a pull request of their own too.
+      npm-minor-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
     labels: [dependencies, ci]
+    groups:
+      # Every action in one pull request, majors included. Actions only ever run in CI, and
+      # the pull request that bumps them runs the whole of CI, so the checks on that one
+      # pull request exercise every action it touches; a broken one shows up red there, not
+      # after the merge. One pull request per action also split pairs that have to be
+      # tested together: upload-artifact and download-artifact hand the built assets from
+      # one job to the next, yet arrived separately, and the second needed main merged into
+      # it by hand before the two had ever run side by side.
+      actions:
+        patterns: ['*']
