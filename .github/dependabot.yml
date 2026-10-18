@@ -21,6 +21,13 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     labels: [dependencies, php]
+    # PHPUnit 13 needs PHP >= 8.4.1. composer.json pins config.platform.php to 8.3.0,
+    # and Dependabot's Composer updater only offers the newest release, so an open
+    # major blocks the 12.5 patch releases. Ignoring the major lets those patches
+    # through. The platform pin stays on 8.3.
+    ignore:
+      - dependency-name: phpunit/phpunit
+        update-types: ["version-update:semver-major"]
     groups:
       # One pull request for the framework stack. Laravel, Filament and Livewire release in
       # lockstep often enough that separate bumps just conflict with each other, and that
