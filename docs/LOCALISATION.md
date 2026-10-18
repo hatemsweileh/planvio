@@ -471,8 +471,11 @@ that stack explicitly, after the session and the authentication that populates i
 the language it resolves is the signed-in administrator's. Filament reads its direction from
 one translation key rather than from the `dir` Planvio's own layouts set, and
 `lang/vendor/filament-panels/{en,ar}/layout.php` is that key. Filament's own strings ship
-translated inside the packages, so nothing has to be published; Planvio's resource labels,
-page titles, table columns, form fields and actions are ordinary `__()` calls.
+translated inside the packages. Filament 5.10 added strings the packaged Arabic files do
+not have yet — global search, copy to clipboard, the column manager, reordering and
+"more tabs" — so those keys are overridden under `lang/vendor/<package>/ar/` and merged
+over the package files. Planvio's resource labels, page titles, table columns, form
+fields and actions are ordinary `__()` calls.
 
 What the panel does *not* get for free is typography. It has its own Tailwind build and its
 own copy of Inter, so neither the Arabic face nor the three corrections in
@@ -751,6 +754,7 @@ our week start*.
 | `App\Http\Controllers\WebManifestController` | `site.webmanifest`, with the reader's `lang` and `dir` |
 | `resources/views/filament/partials/arabic-typography.blade.php` | The three corrections and the Arabic face, for `/admin` |
 | `lang/vendor/filament-panels/{en,ar}/layout.php` | The one key Filament reads its direction from |
+| `lang/vendor/filament*/ar/` | Arabic for the Filament 5.10 strings the packages do not ship yet |
 | `App\Services\Translation\DatabaseTranslationLoader` | Files with rows merged over them |
 | `App\Services\Translation\TranslationRepository` | Reads and writes rows; owns the cache version stamp |
 | `App\Services\Translation\TranslationCatalogue` | Recovers every translatable key from the source |
