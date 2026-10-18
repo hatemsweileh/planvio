@@ -61,6 +61,7 @@ use App\Services\Uploads\ScansUploads;
 use App\Support\Branding;
 use App\Support\CurrentWorkspace;
 use App\Support\RateLimits;
+use App\Support\ReleaseUpdate;
 use App\Support\Settings;
 use Illuminate\Auth\Middleware\EnsureEmailIsVerified;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -293,6 +294,16 @@ final class AppServiceProvider extends ServiceProvider
         $this->keepTenancyAcrossLivewireUpdates();
         $this->limitTheApi();
         $this->limitTheWeb();
+
+        /*
+         | An in-place update is an upload, not a download. Once the new files are on disk
+         | the next request — or the next cron tick, which boots the same providers —
+         | notices that settings.app_version is behind Version::APP_VERSION, drops the
+         | compiled caches the old release left behind, and records the new release.
+         | It does nothing when the versions already agree, and nothing in the test suite,
+         | where running it would rewrite this working tree.
+         */
+        ReleaseUpdate::applyIfNeeded();
     }
 
     /**

@@ -15,7 +15,7 @@ use Illuminate\Foundation\Application;
  */
 final class Version
 {
-    public const APP_VERSION = '1.0.0';
+    public const APP_VERSION = '1.2.0';
 
     public const DB_VERSION = '1.0.0';
 

@@ -1,6 +1,6 @@
 # Known limitations
 
-Everything below is a deliberate boundary of Planvio 1.0.0, stated plainly so you can
+Everything below is a deliberate boundary of Planvio 1.2.0, stated plainly so you can
 decide whether it matters to you before you deploy rather than after.
 
 Nothing here is a bug. Bugs get fixed; these are things Planvio does not do, or does in a

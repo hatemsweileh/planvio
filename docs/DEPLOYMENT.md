@@ -566,14 +566,52 @@ panels can also email cron output — set the notification address before you re
 
 ## Updating
 
-Planvio has no CLI deploy tool, no symlinked releases directory and no blue/green switch.
-What it has is a version check on boot: when the deployed `config/planvio.php → version` is
-newer than the version recorded in the database, Planvio shows an upgrade screen that lists
-the pending migrations before running anything.
+1.2.0 is two archives.
 
-The procedure below keeps the window where the site is unavailable down to the time it takes
-to change one setting and run the migrations. It is not zero downtime. It is short and
-reversible.
+| Archive | Use |
+|---|---|
+| `planvio-v1.2.0-update.zip` | An installation that is already running. Extract it over that directory. |
+| `planvio-v1.2.0.zip` | A new directory. This is also the archive a side-by-side swap uses. |
+
+On boot, when the shipped application version is newer than `settings.app_version`, Planvio
+clears compiled caches and records the new application version. 1.2.0 does not change
+`db_version` (it stays `1.0.0`), so it does not run migrations.
+
+The in-place procedure is the one for 1.0.0 → 1.2.0. The side-by-side procedure further
+down keeps the old directory until you repoint the document root. Use that when you want
+the switch to be a single reversible change, or when a later release bumps `db_version`.
+
+### In place, without a new directory
+
+1. **Back up first.** Database export plus `storage/app/private`, `storage/app/public` and
+   `.env`. See [Backup](#backup).
+2. **Turn maintenance mode on** from the admin UI.
+3. **Upload `planvio-v1.2.0-update.zip` into the live directory** — the one that already
+   contains `artisan` and `.env` — and extract it there, overwriting existing files. Do not
+   delete the directory first. Do not upload the fresh archive here: it contains an empty
+   storage skeleton.
+4. **Open the site.** The document root and the cron jobs do not change. Planvio records
+   application version `1.2.0` and leaves the database version at `1.0.0`.
+5. **Turn maintenance mode off** and check that you can sign in, open a project and download
+   an attachment.
+
+With a shell, from that same directory:
+
+```bash
+cd /var/www/planvio
+unzip -o planvio-v1.2.0-update.zip
+php artisan config:clear
+php artisan view:clear
+systemctl reload php8.3-fpm
+```
+
+`migrate` is not part of 1.2.0.
+
+### Side by side
+
+This keeps the window where the site is unavailable down to the document-root change. It is
+not zero downtime. It is reversible until a migration has run. 1.2.0 has no migration, so
+rolling back is repointing the document root.
 
 ### Without SSH
 
@@ -581,10 +619,13 @@ reversible.
    [Backup](#backup). Do not skip this because the release is "just a patch" — migrations
    are the part that is hard to undo.
 2. **Note the current release path**, e.g. `/home/deploy/planvio-1.0.0`.
-3. **Upload and extract the new release** into a *new* sibling directory, e.g.
-   `/home/deploy/planvio-1.1.0`. Never extract over a running installation: a release ZIP
-   does not delete files that were removed since the last version, so you end up running a
-   mixture of two releases.
+3. **Upload and extract the fresh archive** into a *new* sibling directory, e.g.
+   `/home/deploy/planvio-1.2.0`, from `planvio-v1.2.0.zip`. Do not extract the fresh
+   archive over the running installation: it ships an empty storage skeleton. The update
+   archive is the one that is safe to extract in place, and it is the wrong archive for a
+   new directory because it has no storage skeleton. A ZIP does not delete files that were
+   removed since the last version; the 1.2.0 update removes `resources/views/welcome.blade.php`
+   itself for that reason.
 4. **Copy your state across**, from the old directory into the new one:
    - `.env`
    - `storage/app/private/` (every attachment)
@@ -594,10 +635,11 @@ reversible.
    in [Permissions](#permissions-and-ownership).
 6. **Put the running site into maintenance mode** from the admin UI, so nobody writes to the
    database while the migrations run.
-7. **Repoint the document root** to `/home/deploy/planvio-1.1.0/public`. This is the switch,
+7. **Repoint the document root** to `/home/deploy/planvio-1.2.0/public`. This is the switch,
    and it is a single change in one place.
-8. **Open the site.** Planvio detects the version change and offers to run the pending
-   migrations, showing you what will change first.
+8. **Open the site.** For 1.2.0 there is nothing to migrate. Planvio records application
+   version `1.2.0`. A later release that bumps `db_version` needs `php artisan migrate --force`
+   before it can serve against the new schema.
 9. **Rebuild the caches** (`optimize`), via the one-shot cron trick if you have no shell.
 10. **Take maintenance mode off** and check that you can sign in, open a project and download
     an attachment.
@@ -618,21 +660,21 @@ ln -s /var/www/planvio-1.0.0 /var/www/planvio-current
 
 # Each update
 cd /var/www
-unzip planvio-v1.1.0.zip -d planvio-1.1.0
-cp planvio-1.0.0/.env planvio-1.1.0/.env
-cp planvio-1.0.0/storage/app/planvio-installed.lock planvio-1.1.0/storage/app/
-cp -a planvio-1.0.0/storage/app/private/. planvio-1.1.0/storage/app/private/
-cp -a planvio-1.0.0/storage/app/public/.  planvio-1.1.0/storage/app/public/
-chown -R deploy:www-data planvio-1.1.0
-chmod -R 0775 planvio-1.1.0/storage planvio-1.1.0/bootstrap/cache
+unzip planvio-v1.2.0.zip -d planvio-1.2.0
+cp planvio-1.0.0/.env planvio-1.2.0/.env
+cp planvio-1.0.0/storage/app/planvio-installed.lock planvio-1.2.0/storage/app/
+cp -a planvio-1.0.0/storage/app/private/. planvio-1.2.0/storage/app/private/
+cp -a planvio-1.0.0/storage/app/public/.  planvio-1.2.0/storage/app/public/
+chown -R deploy:www-data planvio-1.2.0
+chmod -R 0775 planvio-1.2.0/storage planvio-1.2.0/bootstrap/cache
 
-cd planvio-1.1.0
+cd planvio-1.2.0
 php artisan config:clear
-php artisan migrate --force
+php artisan view:clear
 php artisan storage:link
 php artisan optimize
 
-ln -sfn /var/www/planvio-1.1.0 /var/www/planvio-current
+ln -sfn /var/www/planvio-1.2.0 /var/www/planvio-current
 systemctl reload php8.3-fpm      # drop the stale realpath cache
 ```
 

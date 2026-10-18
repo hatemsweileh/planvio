@@ -10,12 +10,14 @@ return [
     |--------------------------------------------------------------------------
     |
     | `version` is the application release. `db_version` is bumped whenever a
-    | release requires migrations to run; the upgrade screen compares the value
-    | stored in the settings table against this one to decide what to offer.
+    | release requires migrations to run. An uploaded update compares the
+    | application version stored in the settings table with Version::APP_VERSION
+    | and, when the stored one is older, clears compiled caches and records the
+    | new release. It does not run migrations and it does not change db_version.
     |
     */
 
-    'version' => '1.0.0',
+    'version' => '1.2.0',
     'db_version' => '1.0.0',
 
     /*

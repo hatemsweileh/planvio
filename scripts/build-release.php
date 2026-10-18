@@ -5,9 +5,17 @@ declare(strict_types=1);
 /**
  * Planvio release builder.
  *
- * Produces dist/planvio-v<version>.zip containing everything a customer needs and
- * nothing they do not: vendor/ with production dependencies only, compiled frontend
- * assets, and no development tooling, tests, secrets or VCS metadata.
+ * Produces two archives for the version in config/planvio.php:
+ *
+ *   dist/planvio-v<version>.zip          Fresh install. Empty storage skeleton, installer,
+ *                                        production vendor, compiled assets. Extract into
+ *                                        an empty directory.
+ *   dist/planvio-v<version>-update.zip   In-place update for an installation that is
+ *                                        already running. Same application files, without
+ *                                        storage/ or bootstrap/cache/, so extracting it
+ *                                        over the live directory leaves .env, uploads and
+ *                                        the install lock where they are. The running
+ *                                        application records the new version itself.
  *
  * Run it with PHP from anywhere; it finds the repository from its own location:
  *
@@ -28,9 +36,11 @@ $composerSearch = detectComposer($php);
 $composer = $composerSearch['path'];
 
 $version = readVersion();
+$dbVersion = readDbVersion();
 $stage = ROOT.'/build/staging';
 $dist = ROOT.'/dist';
 $zipPath = $dist.'/planvio-v'.$version.'.zip';
+$updateZipPath = $dist.'/planvio-v'.$version.'-update.zip';
 
 title('Planvio release builder');
 line("Version        : {$version}");
@@ -40,7 +50,8 @@ foreach ($composerSearch['rejected'] as $rejection) {
     line('                 rejected '.$rejection);
 }
 line('Staging        : '.realish($stage));
-line('Output         : '.realish($zipPath));
+line('Fresh install  : '.realish($zipPath));
+line('Update         : '.realish($updateZipPath));
 
 /* ------------------------------------------------------------------ *
  * 1. Preflight
@@ -288,45 +299,86 @@ foreach ($required as $path) {
 line('All required files present.');
 
 /* ------------------------------------------------------------------ *
- * 8. Archive
+ * 8. Archives
  * ------------------------------------------------------------------ */
-step('Creating archive');
+step('Creating archives');
 
 mkdirp($dist);
-@unlink($zipPath);
 
-$zip = new ZipArchive;
-if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-    fail("Could not create {$zipPath}");
-}
+/*
+ * The update archive is the same tree with the two directories a live installation
+ * already has, and must keep, left out. storage/ holds the install lock, the uploads
+ * and the directory guards. bootstrap/cache/ holds compiled configuration. Neither is
+ * something an overwrite should replace; the application clears the compiled files
+ * itself once it notices the new version. UPDATE.txt is added only to this archive so
+ * the fresh-install ZIP stays the installer package it has always been.
+ */
+$updateSkip = ['storage', 'bootstrap/cache'];
+$updateNotes = <<<NOTES
+Planvio {$version} — update archive
 
-$entries = 0;
-$iterator = new RecursiveIteratorIterator(
-    new RecursiveDirectoryIterator($stage, FilesystemIterator::SKIP_DOTS),
-    RecursiveIteratorIterator::SELF_FIRST,
-);
+This archive is for an installation that is already running an older Planvio.
+It is not a fresh install. A new installation needs planvio-v{$version}.zip and
+the browser installer. See docs/INSTALLATION.md.
 
-foreach ($iterator as $item) {
-    /** @var SplFileInfo $item */
-    $relative = str_replace('\\', '/', substr($item->getPathname(), strlen($stage) + 1));
+Shipped application version: {$version}
+Shipped database version: {$dbVersion}
 
-    if ($item->isDir()) {
-        $zip->addEmptyDir($relative);
+1. Back up the database, .env, storage/app/private and storage/app/public.
+2. Turn on maintenance mode (Admin → Settings → General).
+3. Upload this ZIP into the existing Planvio directory — the one that already
+   contains artisan and .env. Do not create a new directory, and do not delete
+   the existing one first.
+4. Extract here and overwrite the existing files when asked.
+5. Do not replace .env, storage/app/private, storage/app/public or
+   storage/app/planvio-installed.lock. This archive does not contain them.
+6. Open the site, or wait for the next cron run. Planvio records application
+   version {$version} and clears its compiled caches. The document root and
+   the cron jobs stay where they are. Planvio does not run migrations.
+7. Confirm Admin → System Information shows application version {$version}.
+   When the database version stored before this update was already {$dbVersion},
+   it stays {$dbVersion}. Then turn maintenance mode off.
 
-        continue;
-    }
+If System Information shows a database version older than {$dbVersion}, this
+release added migrations. Restore the backup and follow the side-by-side steps
+in docs/UPGRADING.md. Do not keep serving this code against the old schema.
 
-    $zip->addFile($item->getPathname(), $relative);
-    $entries++;
+Planvio does not download updates. You uploaded this archive; the application
+only adopts the files that are already on disk.
 
-    // No periodic close() here, deliberately. Closing is what actually writes the
-    // archive, so flushing every N files rewrites everything already added and turns the
-    // whole step quadratic - measurably minutes on a 17k-file tree. libzip reads each
-    // source file as it writes it rather than holding 17k descriptors open, so the
-    // exhaustion this was guarding against does not occur.
-}
+NOTES;
 
-$zip->close();
+$entries = writeArchive($zipPath, $stage, []);
+$updateEntries = writeArchive($updateZipPath, $stage, $updateSkip, 'UPDATE.txt', $updateNotes);
+
+assertArchiveContains($zipPath, [
+    'artisan',
+    'public/index.php',
+    'public/build/manifest.json',
+    'storage/.htaccess',
+    'storage/app/.htaccess',
+    'bootstrap/cache/.gitignore',
+], [
+    'UPDATE.txt',
+    '.env',
+    'storage/app/planvio-installed.lock',
+]);
+
+assertArchiveContains($updateZipPath, [
+    'artisan',
+    'public/index.php',
+    'public/build/manifest.json',
+    'UPDATE.txt',
+    'config/planvio.php',
+], [
+    '.env',
+    'storage/.htaccess',
+    'storage/app/.htaccess',
+    'bootstrap/cache/.gitignore',
+    'storage/app/planvio-installed.lock',
+]);
+
+assertArchiveOmitsPrefixes($updateZipPath, $updateSkip);
 
 if (! isset($options['keep-staging'])) {
     rmrf($stage);
@@ -335,15 +387,14 @@ if (! isset($options['keep-staging'])) {
 /* ------------------------------------------------------------------ *
  * Done
  * ------------------------------------------------------------------ */
-$size = filesize($zipPath);
-
 title('Release ready');
-line('File     : '.realish($zipPath));
-line('Entries  : '.number_format($entries));
-line('Size     : '.formatBytes($size));
-line('SHA-256  : '.hash_file('sha256', $zipPath));
+reportArchive('Fresh install', $zipPath, $entries);
 echo PHP_EOL;
-line('Deploy: upload, extract, point the document root at public/, open the domain.');
+line('Extract into an empty directory, point the document root at public/, open the domain.');
+echo PHP_EOL;
+reportArchive('Update', $updateZipPath, $updateEntries);
+echo PHP_EOL;
+line('Extract over an existing installation. Storage, .env and the install lock are not in this archive.');
 echo PHP_EOL;
 
 exit(0);
@@ -531,7 +582,163 @@ function readVersion(): string
         }
     }
 
-    return '1.0.0';
+    fail('Could not read version from config/planvio.php.');
+}
+
+/**
+ * The schema generation, read the same way as {@see readVersion()}. The update
+ * archive's instructions quote it so a release that did add migrations does not
+ * inherit a note written for one that did not.
+ */
+function readDbVersion(): string
+{
+    $config = ROOT.'/config/planvio.php';
+
+    if (is_file($config)) {
+        $source = (string) file_get_contents($config);
+
+        if (preg_match("/'db_version'\s*=>\s*'([^']+)'/", $source, $matches) === 1) {
+            return $matches[1];
+        }
+    }
+
+    fail('Could not read db_version from config/planvio.php.');
+}
+
+/**
+ * Add the staged tree to one archive and close it once.
+ *
+ * No periodic close() along the way. Closing is what actually writes the archive, so
+ * flushing every N files rewrites everything already added and turns the whole step
+ * quadratic — measurably minutes on a 17k-file tree. libzip reads each source file as it
+ * writes it rather than holding 17k descriptors open, so the exhaustion a periodic close
+ * was guarding against does not occur.
+ *
+ * @param list<string> $skipPrefixes relative directories left out of this archive
+ */
+function writeArchive(
+    string $zipPath,
+    string $stage,
+    array $skipPrefixes,
+    ?string $extraName = null,
+    ?string $extraContents = null,
+): int {
+    @unlink($zipPath);
+
+    $zip = new ZipArchive;
+    if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+        fail("Could not create {$zipPath}");
+    }
+
+    $entries = 0;
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($stage, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::SELF_FIRST,
+    );
+
+    foreach ($iterator as $item) {
+        /** @var SplFileInfo $item */
+        $relative = str_replace('\\', '/', substr($item->getPathname(), strlen($stage) + 1));
+
+        if (skippedPrefix($relative, $skipPrefixes)) {
+            continue;
+        }
+
+        if ($item->isDir()) {
+            $zip->addEmptyDir($relative);
+
+            continue;
+        }
+
+        $zip->addFile($item->getPathname(), $relative);
+        $entries++;
+    }
+
+    if ($extraName !== null) {
+        $zip->addFromString($extraName, (string) $extraContents);
+        $entries++;
+    }
+
+    $zip->close();
+
+    return $entries;
+}
+
+/**
+ * @param list<string> $prefixes
+ */
+function skippedPrefix(string $relative, array $prefixes): bool
+{
+    foreach ($prefixes as $prefix) {
+        if ($relative === $prefix || str_starts_with($relative, $prefix.'/')) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * @param list<string> $present
+ * @param list<string> $absent
+ */
+function assertArchiveContains(string $zipPath, array $present, array $absent): void
+{
+    $zip = new ZipArchive;
+
+    if ($zip->open($zipPath) !== true) {
+        fail("Could not reopen {$zipPath}");
+    }
+
+    foreach ($present as $name) {
+        if ($zip->locateName($name) === false) {
+            $zip->close();
+            fail("{$zipPath} is missing {$name}");
+        }
+    }
+
+    foreach ($absent as $name) {
+        if ($zip->locateName($name) !== false) {
+            $zip->close();
+            fail("{$zipPath} must not contain {$name}");
+        }
+    }
+
+    $zip->close();
+}
+
+/**
+ * @param list<string> $prefixes
+ */
+function assertArchiveOmitsPrefixes(string $zipPath, array $prefixes): void
+{
+    $zip = new ZipArchive;
+
+    if ($zip->open($zipPath) !== true) {
+        fail("Could not reopen {$zipPath}");
+    }
+
+    for ($index = 0; $index < $zip->numFiles; $index++) {
+        $name = (string) $zip->getNameIndex($index);
+
+        if (skippedPrefix(rtrim($name, '/'), $prefixes)) {
+            $zip->close();
+            fail("{$zipPath} contains {$name}, which an in-place update must not overwrite");
+        }
+    }
+
+    $zip->close();
+}
+
+function reportArchive(string $label, string $zipPath, int $entries): void
+{
+    $size = filesize($zipPath);
+
+    line($label);
+    line('File     : '.realish($zipPath));
+    line('Entries  : '.number_format($entries));
+    line('Size     : '.($size === false ? 'unknown' : formatBytes($size)));
+    line('SHA-256  : '.hash_file('sha256', $zipPath));
 }
 
 /**

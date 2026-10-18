@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="Licence: AGPL-3.0" src="https://img.shields.io/badge/licence-AGPL--3.0-3F66B0"></a>
-  <a href="https://github.com/hatemsweileh/planvio/releases"><img alt="Version" src="https://img.shields.io/badge/version-1.0.0-3F66B0"></a>
+  <a href="https://github.com/hatemsweileh/planvio/releases"><img alt="Version" src="https://img.shields.io/badge/version-1.2.0-3F66B0"></a>
   <img alt="PHP" src="https://img.shields.io/badge/php-8.3%20%7C%208.4-777BB4">
   <img alt="Laravel" src="https://img.shields.io/badge/laravel-13-FF2D20">
   <img alt="Tests" src="https://img.shields.io/badge/tests-2%2C034%20passing-3FB07A">
@@ -170,7 +170,7 @@ Planvio installs on ordinary cPanel shared hosting in about fifteen minutes, ent
 through a browser and File Manager.
 
 ```
-1.  Download planvio-v1.0.0.zip from Releases
+1.  Download planvio-v1.2.0.zip from Releases (the fresh install; the update archive is for an existing 1.0.0)
 2.  Upload it to your hosting account
 3.  Extract it
 4.  Point your domain's document root at planvio/public

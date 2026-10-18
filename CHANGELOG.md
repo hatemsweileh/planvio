@@ -16,6 +16,78 @@ Nothing yet.
 
 ---
 
+## [1.2.0] — 2026-10-18
+
+An application release. The database version stays `1.0.0`: this release adds no migrations.
+Installations of 1.0.0 update by uploading `planvio-v1.2.0-update.zip` over the directory
+they already run. New installations use `planvio-v1.2.0.zip` and the browser installer.
+
+### Added
+
+- Two release archives. `planvio-v1.2.0.zip` is a fresh install: production dependencies,
+  compiled assets, the installer, and an empty storage skeleton. `planvio-v1.2.0-update.zip`
+  is the same application with `storage/` and `bootstrap/cache/` left out, so extracting it
+  over a live directory does not replace `.env`, uploads, or the install lock.
+- An in-place update. After those files are on disk, the next request or the next cron run
+  records application version 1.2.0, clears compiled caches, and removes
+  `resources/views/welcome.blade.php`, which 1.0.0 shipped and nothing routes to. Planvio
+  does not download the archive and does not run migrations.
+
+### Fixed
+
+- Task descriptions are sanitised before they are stored, including descriptions written by
+  the API and by CSV import. A stored script can no longer run when the description is shown.
+- The task editor no longer throws when the toolbar acts on a selection the browser has
+  dropped, and it no longer registers the link mark twice.
+- Checklist items written by the editor survive sanitising: the checkbox markup is kept, and
+  other inputs are still stripped.
+- The description editor and its read-only view no longer share one Livewire identity, so
+  opening the editor does not reuse the read-only node.
+- The description Edit button stays in the corner of the description instead of shifting
+  with the toolbar.
+- Dragging a card you are not allowed to move shows "You cannot move this task." instead of
+  a framework error, and the drag handle is not offered.
+- A touch on a card waits before it starts a drag, so scrolling the board does not pick the
+  card up. The Move button stays visible without a hover pointer.
+- Dropping a card back where it already was, or choosing its current column, does not write
+  a move.
+- Reopening a task from Done restores the progress it had before it was completed, or the
+  checklist's completion when it has one. Leaving Cancelled does not rewrite progress.
+- An empty Done or Cancelled column says that done work is hidden, and offers to show it,
+  instead of looking like a column with no tasks.
+- Moving a card refreshes the board once.
+- Project CSV export no longer repeats or skips a project, and it includes every task when
+  a project has 500 or more.
+- Filament 5.10 strings that the packaged Arabic was missing — copy, global search, list
+  tabs, the query builder, the column manager — are translated.
+
+### Changed
+
+- Laravel 13.36 and Filament 5.10.2.
+- TipTap 3.32, Vite 8.3, and the HTML sanitiser and Markdown libraries current with their
+  patch releases.
+- The release builder reads `.gitignore` itself, refuses to package environment files, and
+  publishes Filament's assets from the `vendor/` directory the archive ships.
+- Dependabot may open PHPUnit 12 patch updates. PHPUnit 13 stays closed, because it requires
+  PHP 8.4.1 and Planvio still supports PHP 8.3.
+
+### Security
+
+- Stored task descriptions are cleaned with the same sanitiser comments and wiki pages
+  already used. See [docs/SECURITY.md](docs/SECURITY.md).
+- `shell-quote` is pinned to 1.12.0 (GHSA-pqg4-j6r4-53mv). The build-time dependency does
+  not ship in the release archive.
+
+### Notes
+
+- Requires PHP 8.3 or 8.4 and MySQL 5.7+ / MariaDB 10.6+. Unchanged from 1.0.0.
+- No schema change. `db_version` stays `1.0.0`. There is no migration step and no upgrade
+  screen for this release.
+- A fresh install still starts at the browser wizard. An update does not. See
+  [docs/UPGRADING.md](docs/UPGRADING.md).
+
+---
+
 ## [1.0.0] — 2026-09-09
 
 First public release.
@@ -94,5 +166,6 @@ First public release.
 - Known boundaries are documented in [docs/LIMITATIONS.md](docs/LIMITATIONS.md) rather than
   left for you to discover.
 
-[Unreleased]: https://github.com/hatemsweileh/planvio/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/hatemsweileh/planvio/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/hatemsweileh/planvio/compare/v1.0.0...v1.2.0
 [1.0.0]: https://github.com/hatemsweileh/planvio/releases/tag/v1.0.0

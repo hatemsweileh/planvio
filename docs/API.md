@@ -1425,7 +1425,7 @@ Subscribing to "everything Planvio emits" includes events added in future releas
 POST /your/endpoint HTTP/1.1
 Content-Type: application/json
 Accept: application/json
-User-Agent: Planvio/1.0.0
+User-Agent: Planvio/1.2.0
 X-Planvio-Event: task.status_changed
 X-Planvio-Delivery: 0f2b3d0f-1c2a-4c9e-9b2f-2a41e6c9f5b1
 X-Planvio-Timestamp: 1789234567

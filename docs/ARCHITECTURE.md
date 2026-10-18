@@ -5,7 +5,7 @@
 > do not "improve" names. If something is missing, follow the nearest documented
 > pattern rather than inventing a new one.
 
-Version: 1.0.0 · Laravel 13 · Filament 5 · Livewire 4 · PHP >= 8.3 · MySQL 8 / MariaDB 10.6+
+Version: 1.2.0 · Laravel 13 · Filament 5 · Livewire 4 · PHP >= 8.3 · MySQL 8 / MariaDB 10.6+
 
 ---
 
@@ -49,7 +49,7 @@ app/
   Notifications/
   Policies/
   Services/                             Read models / query services / domain calculators
-  Support/                              Settings, Branding, Version, Health, Permissions matrix
+  Support/                              Settings, Branding, Version, ReleaseUpdate, Health, Permissions matrix
 database/migrations/                    All schema. Never modify schema at runtime.
 resources/views/app/                    Product Blade
 resources/views/installer/

@@ -75,10 +75,14 @@ get onto disk and how the web server is pointed at them.
 
 ### Get the release
 
-You need `planvio-v1.0.0.zip`. Releases are built with `scripts/build-release.php`, which
-stages the tree, installs production-only Composer dependencies, trims development files out
-of `vendor/`, refuses to package if it finds a `.env`, a key file, a database file or VCS
-metadata, and then prints a SHA-256 of the archive it produced.
+You need `planvio-v1.2.0.zip`, the fresh-install archive. There is a second file,
+`planvio-v1.2.0-update.zip`, for an installation that is already running 1.0.0; that one
+is not an installer. See [UPGRADING.md](UPGRADING.md).
+
+Releases are built with `scripts/build-release.php`, which stages the tree, installs
+production-only Composer dependencies, trims development files out of `vendor/`, refuses to
+package if it finds a `.env`, a key file, a database file or VCS metadata, and then prints a
+SHA-256 of each archive it produced.
 
 Verify that hash against the archive you downloaded before you extract it. Planvio does not
 verify downloads for you and never fetches anything on its own — see
@@ -136,7 +140,7 @@ FLUSH PRIVILEGES;
 
 ```bash
 sudo mkdir -p /var/www/planvio
-sudo unzip planvio-v1.0.0.zip -d /var/www/planvio
+sudo unzip planvio-v1.2.0.zip -d /var/www/planvio
 sudo chown -R www-data:www-data /var/www/planvio
 sudo find /var/www/planvio -type d -exec chmod 755 {} \;
 sudo find /var/www/planvio -type f -exec chmod 644 {} \;
@@ -282,7 +286,7 @@ Nine screens, in this order. Nothing is written to disk or to your database unti
 ### Welcome
 
 **On screen:** the Planvio wordmark, the version you are about to install
-(`1.0.0`), a one-paragraph summary of what the wizard will do, the licence, and a single
+(`1.2.0`), a one-paragraph summary of what the wizard will do, the licence, and a single
 **Get started** button.
 
 **What it asks:** you accept the licence.

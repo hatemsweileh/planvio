@@ -1162,8 +1162,14 @@ So:
 php scripts/build-release.php
 ```
 
-Output: `dist/planvio-v1.0.0.zip` — the version comes from
-`config/planvio.php → version`.
+Output: two archives, named from `config/planvio.php → version`.
+
+- `dist/planvio-v1.2.0.zip` — fresh install. Empty storage skeleton, installer, production
+  `vendor/`, compiled assets.
+- `dist/planvio-v1.2.0-update.zip` — in-place update. The same tree without `storage/` or
+  `bootstrap/cache/`, plus `UPDATE.txt`. Extracting it over a live directory leaves `.env`,
+  uploads and the install lock in place. The application records the new version on the
+  next request.
 
 ### What it does, in order
 
@@ -1281,12 +1287,15 @@ Output: `dist/planvio-v1.0.0.zip` — the version comes from
    `public/index.php`, `public/.htaccess`, `.htaccess`, `artisan`,
    `public/build/manifest.json`, `config/planvio.php`, `config/ai.php` and
    `bootstrap/app.php` are all present.
-9. **Archive** — adds every staged file to the ZIP in one pass and closes it once. Closing
-   is what actually writes the archive, so it is not flushed along the way: doing that
-   rewrites everything already added and made the step quadratic on a tree of about 17,000
-   files.
-10. **Report** — prints the path, entry count, size and SHA-256. Publish that hash with the
-   release.
+9. **Archives** — writes two ZIPs from the staged tree, each closed once. Closing is what
+   actually writes the archive, so it is not flushed along the way: doing that rewrites
+   everything already added and made the step quadratic on a tree of about 17,000 files.
+   The fresh archive is the whole tree. The update archive omits `storage/` and
+   `bootstrap/cache/` and adds `UPDATE.txt`. The build then reopens both and refuses to
+   finish if the fresh archive is missing its storage skeleton, or if the update archive
+   contains `storage/`, `bootstrap/cache/`, or a `.env`.
+10. **Report** — prints the path, entry count, size and SHA-256 of each archive. Publish
+    both hashes with the release.
 
 ### Flags
 
@@ -1338,7 +1347,9 @@ out of the release whether or not it was the one used.
 - [ ] `db_version` is bumped **if and only if** the release adds migrations
 - [ ] The build printed "No .env, key material, database file or VCS metadata found"
 - [ ] The `.gitignore excluded …` line names nothing you expected to ship
-- [ ] You extracted the ZIP somewhere clean and confirmed `vendor/`,
+- [ ] Both archives were produced. The fresh one contains `storage/.htaccess`. The update
+      one contains `UPDATE.txt` and does not contain `storage/` or `bootstrap/cache/`
+- [ ] You extracted the fresh ZIP somewhere clean and confirmed `vendor/`,
       `public/build/manifest.json` and `public/js/filament/` are inside it
 
 ---

@@ -20,9 +20,14 @@ Planvio uses semantic versioning: `MAJOR.MINOR.PATCH`.
 | **MINOR** | New features, backward compatible | Usually adds migrations. Safe, but back up first. |
 | **PATCH** | Fixes only | No schema change, no configuration change. |
 
-Release archives are named after the version: `planvio-v1.0.0.zip`. The release builder
-prints a SHA-256 for every archive it produces. Check it before you extract — that hash is
-the only integrity guarantee, because Planvio does not verify downloads for you.
+Each release is two archives. The release builder prints a SHA-256 for every archive it
+produces. Check it before you extract — that hash is the only integrity guarantee, because
+Planvio does not verify downloads for you.
+
+| Archive | Who it is for | What you do with it |
+|---|---|---|
+| `planvio-v1.2.0.zip` | A new installation | Extract into an empty directory and open the browser installer. See [INSTALLATION.md](INSTALLATION.md). |
+| `planvio-v1.2.0-update.zip` | An installation already running 1.0.0 | Extract over that directory. Planvio records 1.2.0 itself. See [Updating in place](#updating-in-place). |
 
 ### Where the version is shown
 
@@ -42,7 +47,7 @@ running code and the running database actually are, not what you think you uploa
 `config/planvio.php` carries both:
 
 ```php
-'version'    => '1.0.0',   // the release
+'version'    => '1.2.0',   // the release
 'db_version' => '1.0.0',   // the schema generation
 ```
 
@@ -71,16 +76,25 @@ On each request Planvio compares the **stored** `db_version` against the **shipp
 | No stored value, but the install lock exists | Treated as "older than shipped". The upgrade screen appears and lists every migration that has not run. |
 | Stored is **higher** | Your files are older than your database — you rolled back the code without rolling back the data. Planvio refuses to run anything and tells you to restore the newer release. It will not migrate downwards. |
 
-A patch release that adds no migrations leaves `db_version` untouched, so no upgrade screen
-appears. That is correct: replacing the files is the whole upgrade. Because you extract each
-release into a **fresh directory** and carry across only `.env` and `storage/app`, the
-compiled caches in `bootstrap/cache/` and `storage/framework/views/` start out empty. There
-is nothing stale to clear.
+A release that adds no migrations leaves `db_version` untouched, so there is nothing to
+migrate. 1.2.0 is that kind of release: the schema generation stays `1.0.0`.
 
-The one cache that does survive a folder swap is the settings cache, which lives in the
-database `cache` table. The upgrade screen invalidates it. After a migration-free patch
-release, sign in and check **Admin → System Information** shows the new version; if it shows
-the old one, clear the cache table (see [Caches](#what-gets-cleared)).
+Replacing the files is the whole upgrade, and there are two ways to do it.
+
+- **In place**, with `planvio-v1.2.0-update.zip`. The archive does not contain `storage/`
+  or `bootstrap/cache/`, so your `.env`, uploads and install lock stay where they are. The
+  next request deletes compiled files the old release left in those directories and writes
+  `settings.app_version` = `1.2.0`. See [Updating in place](#updating-in-place).
+- **Side by side**, with `planvio-v1.2.0.zip` extracted into a new directory. You copy
+  `.env` and `storage/app` across and repoint the document root and the cron jobs. The new
+  directory has empty compiled caches, so there is nothing stale to clear.
+
+The one cache that does survive either way is the settings cache, which lives in the
+database `cache` table. Adopting the release rewrites `app_version` through that cache.
+After the update, sign in and check **Admin → System Information** shows application version
+`1.2.0` and database version `1.0.0`. If the application version is still `1.0.0`, PHP is
+serving the previous bytecode: restart PHP from the host panel, or delete the `.php` files
+in `bootstrap/cache/` (see [Troubleshooting](#troubleshooting)).
 
 ---
 
@@ -102,7 +116,7 @@ Do this every time. A five-minute export is cheaper than a restore you cannot pe
 8. Click **Export** and keep the `.sql.gz` file somewhere off the server.
 
 Name the file with the version you are leaving, for example
-`acme_planvio-before-1.1.0.sql.gz`. You will not remember later.
+`acme_planvio-before-1.2.0.sql.gz`. You will not remember later.
 
 ### 2. Copy the directories that hold your data
 
@@ -127,9 +141,83 @@ You do **not** need to back up `vendor/`, `public/build/`, `bootstrap/cache/` or
 
 ---
 
-## Upgrading, step by step
+## Updating in place
 
-The procedure keeps the old installation intact until the new one is proven. You never
+Use this to take an installation of 1.0.0 to 1.2.0. The directory, the document root and
+the two cron jobs stay where they are. You upload one archive; Planvio records the new
+version.
+
+1.2.0 does not change the database. `db_version` stays `1.0.0`. There is no migration to
+run and no upgrade screen.
+
+### What the update archive leaves alone
+
+`planvio-v1.2.0-update.zip` does not contain:
+
+| Path | Why it is absent |
+|---|---|
+| `.env` | Database credentials and `APP_KEY`. Replacing it makes every encrypted value unreadable. |
+| `storage/` | The install lock, task attachments, avatars, logos and logs. |
+| `bootstrap/cache/` | Compiled configuration from the running installation. Planvio deletes the stale `.php` files itself after the new code is in place. |
+
+Extracting it over the live directory overwrites application code, `vendor/` and
+`public/build/`, and does not delete your uploads. Do not extract the **fresh** archive
+(`planvio-v1.2.0.zip`) over a live directory: that archive contains an empty storage
+skeleton. Use it only for a new directory.
+
+### Steps
+
+1. Read [1.2.0](#120--application-release-same-database) below. There is no manual schema step.
+2. Turn on maintenance mode in **Admin → Settings → General**. It is stored in the database,
+   so it is still on after the files change. Platform administrators keep access.
+3. [Back up](#back-up-first). Database export, `.env`, `storage/app/private/` and
+   `storage/app/public/`.
+4. In File Manager, open the directory that already contains `artisan` and `.env`. Upload
+   `planvio-v1.2.0-update.zip` there. Do not create a new folder and do not delete this one.
+5. Extract the ZIP into that same directory and overwrite existing files when asked.
+   Delete the ZIP afterwards.
+6. Open your Planvio URL, or wait for the next minute's cron run. Either one boots the
+   application. Planvio sees stored `app_version` `1.0.0` against shipped `1.2.0`, removes
+   compiled caches, removes the unrouted `resources/views/welcome.blade.php` left from
+   1.0.0, writes `app_version` `1.2.0`, and updates the version recorded in the install
+   lock. It does not change `db_version`.
+7. Check **Admin → System Information**. Application version `1.2.0`. Database version
+   `1.0.0`.
+8. Turn maintenance mode off. Open a project, a board and a task. Download an attachment
+   that was uploaded before the update.
+
+If System Information still shows `1.0.0` after a refresh, the host is running the previous
+PHP bytecode. Restart PHP from the panel (cPanel: **MultiPHP Manager**, or the "restart
+PHP" control your host provides) and open the site again.
+
+### With a shell
+
+From the live directory — the one that already contains `.env`:
+
+```bash
+cd /var/www/planvio
+unzip -o planvio-v1.2.0-update.zip
+php artisan config:clear
+php artisan view:clear
+```
+
+`config:clear` and `view:clear` do the same cache drop the next request would do. Then open
+the site. `migrate` is not required for 1.2.0.
+
+Reload PHP-FPM if the version does not change (`systemctl reload php8.3-fpm`), so the
+realpath cache drops the old files.
+
+---
+
+## Upgrading into a new directory
+
+Use this when you would rather keep the old directory until the new one is proven, or when
+a later release bumps `db_version` and migrations have to run before the new code can serve.
+1.2.0 does not need it. The paths below use 1.2.0 as the directory you are moving to; the
+archive in this procedure is the **fresh** one, `planvio-v1.2.0.zip`, because the new
+directory needs the storage skeleton.
+
+The procedure keeps the old installation intact until the new one is proven. You do not
 overwrite a working directory.
 
 ### Step 1 — Read the notes
@@ -154,10 +242,11 @@ access while it is engaged; everyone else sees the maintenance message.
 ### Step 4 — Upload and extract the new release
 
 1. Open **File Manager** and go to your home directory (`/home/youraccount`).
-2. Create a new folder named after the new version, for example `planvio-1.1.0`.
+2. Create a new folder named after the new version, for example `planvio-1.2.0`.
    Do not extract on top of the running installation.
-3. Enter it, click **Upload**, and upload `planvio-v1.1.0.zip`.
-4. Right-click the ZIP → **Extract** → into `/home/youraccount/planvio-1.1.0`.
+3. Enter it, click **Upload**, and upload `planvio-v1.2.0.zip` — the fresh archive, not
+   the update archive. The update archive has no storage skeleton.
+4. Right-click the ZIP → **Extract** → into `/home/youraccount/planvio-1.2.0`.
 5. Delete the ZIP.
 
 You now have two complete installations side by side:
@@ -165,7 +254,7 @@ You now have two complete installations side by side:
 ```
 /home/youraccount/
 ├── planvio/          <-- currently live, version 1.0.0
-└── planvio-1.1.0/    <-- new files, not yet serving
+└── planvio-1.2.0/    <-- new files, not yet serving
 ```
 
 ### Step 5 — Carry your data across
@@ -173,9 +262,9 @@ You now have two complete installations side by side:
 Copy these from the old folder into the new one, keeping the same relative paths:
 
 ```
-planvio/.env                  ->  planvio-1.1.0/.env
-planvio/storage/app/private/  ->  planvio-1.1.0/storage/app/private/
-planvio/storage/app/public/   ->  planvio-1.1.0/storage/app/public/
+planvio/.env                  ->  planvio-1.2.0/.env
+planvio/storage/app/private/  ->  planvio-1.2.0/storage/app/private/
+planvio/storage/app/public/   ->  planvio-1.2.0/storage/app/public/
 ```
 
 In File Manager, select the item, choose **Copy**, and type the destination path.
@@ -186,7 +275,7 @@ the `.htaccess` guards that the release ships inside `storage/`.
 
 **Do not copy** `config/`, `app/`, `vendor/`, `public/`, `routes/` or `bootstrap/` from the
 old installation. Those are the release. Copying them forward is how you end up running
-1.0.0 code that claims to be 1.1.0.
+1.0.0 code that claims to be 1.2.0.
 
 ### Step 6 — Check permissions
 
@@ -208,16 +297,17 @@ Right-click → **Change Permissions** → tick `755` → tick **Recurse into su
 1. Open **Domains** in cPanel.
 2. Find the domain serving Planvio and edit its document root.
 3. Change it from `/home/youraccount/planvio/public` to
-   `/home/youraccount/planvio-1.1.0/public`.
+   `/home/youraccount/planvio-1.2.0/public`.
 4. Save.
 
 This is the moment the new version goes live. Everything before it was reversible by doing
 nothing.
 
-### Step 8 — Run the upgrade in the browser
+### Step 8 — Open the site
 
-Open your Planvio URL. Because the stored `db_version` is now behind the shipped one,
-Planvio shows the upgrade screen instead of the application. Work through it —
+Open your Planvio URL. For 1.2.0 the database version did not change, so the application
+serves normally and records application version `1.2.0` on the first request. A later
+release that bumps `db_version` shows the upgrade screen instead, and you work through it —
 [what it does is described below](#what-the-upgrade-screen-does).
 
 ### Step 9 — Update the two cron jobs
@@ -228,11 +318,11 @@ the scheduler and the queue worker are running the previous release's `artisan`.
 Open **Cron Jobs** in cPanel and edit both entries to use the new path:
 
 ```
-/opt/cpanel/ea-php83/root/usr/bin/php /home/youraccount/planvio-1.1.0/artisan schedule:run >/dev/null 2>&1
+/opt/cpanel/ea-php83/root/usr/bin/php /home/youraccount/planvio-1.2.0/artisan schedule:run >/dev/null 2>&1
 ```
 
 ```
-/opt/cpanel/ea-php83/root/usr/bin/php /home/youraccount/planvio-1.1.0/artisan queue:work database --queue=default,ai --stop-when-empty --max-time=280 --tries=3 >/dev/null 2>&1
+/opt/cpanel/ea-php83/root/usr/bin/php /home/youraccount/planvio-1.2.0/artisan queue:work database --queue=default,ai --stop-when-empty --max-time=280 --tries=3 >/dev/null 2>&1
 ```
 
 **Admin → System Information** shows the exact PHP binary path Planvio is running under and
@@ -242,8 +332,8 @@ editing by hand.
 ### Step 10 — Turn maintenance mode off and verify
 
 1. Switch maintenance mode off in **Admin → Settings → General**.
-2. Check **Admin → System Information**: application version and database version should
-   both read `1.1.0`.
+2. Check **Admin → System Information**: application version `1.2.0`, database version
+   `1.0.0`. A later release that changed the schema shows the new database version here too.
 3. Check **Admin → System Health** is green, including *Scheduler: last ran N minutes ago*
    (wait two minutes after editing cron).
 4. Open a project, a board and a task. Confirm an existing attachment still downloads and an
@@ -378,7 +468,15 @@ Planvio has **no automatic update mechanism**. It does not check a remote server
 versions, it does not download release archives, and it cannot replace its own files. You
 download the release, you verify the hash, you upload it.
 
-This is deliberate, and it is a security decision rather than a missing feature:
+This is deliberate, and it is a security decision rather than a missing feature. Uploading
+an archive you downloaded, and having Planvio adopt the files already on disk, is the
+opposite of that mechanism: nothing in the application fetches a release, and nothing in
+the application writes a new copy of itself from the network.
+
+The in-place update in 1.2.0 only runs after you have extracted `planvio-v1.2.0-update.zip`
+yourself. It clears compiled caches and records `settings.app_version`. It does not contact
+a server, it does not download a ZIP, and it cannot replace a file you did not already put
+there.
 
 - **No self-writing code path.** An application that can overwrite its own PHP files has, by
   construction, a mechanism for turning a network response into executed code. Planvio does
@@ -429,6 +527,29 @@ Baseline established by this release, for reference when later versions change i
 | Install lock | `storage/app/planvio-installed.lock` |
 
 No manual steps. No configuration migrations. No deprecated keys.
+
+### 1.2.0 — application release, same database
+
+**Application version:** `1.2.0` · **Database version:** `1.0.0` (unchanged)
+
+Ships as two archives. `planvio-v1.2.0.zip` is a fresh install. `planvio-v1.2.0-update.zip`
+is extracted over a 1.0.0 directory; see [Updating in place](#updating-in-place).
+
+| | |
+|---|---|
+| Migrations | None. Do not run `migrate` for this release. |
+| `settings.app_version` | Written to `1.2.0` on the next request or cron run after the new files are in place |
+| `settings.db_version` | Left at `1.0.0` |
+| Removed file | `resources/views/welcome.blade.php` (shipped in 1.0.0, not routed). An in-place update deletes it. |
+| Document root and cron | Unchanged if you use the update archive |
+| PHP, database, extensions | Same baseline as 1.0.0 |
+
+No new configuration keys. No deprecated keys. Encrypted values keep the same `APP_KEY`.
+
+What changed in the product is in [CHANGELOG.md](../CHANGELOG.md). The short version: task
+descriptions are sanitised before they are stored, the board and the description editor
+are fixed, project CSV export covers every task, and the Filament 5.10 strings missing
+from Arabic are translated.
 
 ---
 
@@ -508,9 +629,12 @@ The new `db_version` was not stored — usually because the `settings` table wri
 because you are looking at a *third* copy of Planvio whose document root you never changed.
 Check `storage/logs/` in the new folder.
 
-**Version says 1.1.0 in the footer but 1.0.0 in System Information**
-A stale compiled config. Delete the `.php` files in `bootstrap/cache/` and empty the `cache`
-table in phpMyAdmin.
+**Version says 1.0.0 in the footer after you uploaded 1.2.0**
+The document root still points at the old folder, or PHP is still running the previous
+bytecode. Check **Domains** in cPanel, then restart PHP. **Admin → System Information**
+shows which directory is actually running. Deleting the `.php` files in `bootstrap/cache/`
+drops a compiled config that still says `1.0.0`; the next request writes `app_version`
+`1.2.0` if the new code is the code being executed.
 
 **Scheduler and queue stopped working after the upgrade**
 Step 9. The cron commands still point at the old directory.
