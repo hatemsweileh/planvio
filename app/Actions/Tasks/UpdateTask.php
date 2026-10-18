@@ -8,6 +8,7 @@ use App\Events\Tasks\TaskUpdated;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\ActivityLogger;
+use App\Services\HtmlSanitizer;
 use BackedEnum;
 use DateTimeInterface;
 use Illuminate\Support\Carbon;
@@ -30,6 +31,7 @@ final class UpdateTask
         private readonly ChangeTaskStatus $changeStatus,
         private readonly AssignTask $assign,
         private readonly ActivityLogger $activity,
+        private readonly HtmlSanitizer $sanitizer,
     ) {}
 
     public function __invoke(Task $task, TaskChanges $changes, User $actor): Task
@@ -49,13 +51,14 @@ final class UpdateTask
                 ($this->assign)($task, $changes->assignee, $actor);
             }
 
-            $diff = $this->diff($task, $changes->plainColumns());
+            $columns = $this->columnsToStore($changes);
+            $diff = $this->diff($task, $columns);
 
             if ($diff === []) {
                 return $task;
             }
 
-            foreach ($changes->plainColumns() as $column => $value) {
+            foreach ($columns as $column => $value) {
                 if (array_key_exists($column, $diff)) {
                     $task->setAttribute($column, $value);
                 }
@@ -69,6 +72,30 @@ final class UpdateTask
 
             return $task;
         });
+    }
+
+    /**
+     * Touched columns as they will be stored.
+     *
+     * Description is rendered without escaping, so the value compared and written is the
+     * one the sanitiser kept. Recording the refused markup would claim the column holds
+     * something it does not.
+     *
+     * @return array<string, mixed>
+     */
+    private function columnsToStore(TaskChanges $changes): array
+    {
+        $columns = $changes->plainColumns();
+
+        if (! array_key_exists('description', $columns)) {
+            return $columns;
+        }
+
+        $description = $columns['description'];
+
+        $columns['description'] = $this->sanitizer->sanitizeNullable(is_string($description) ? $description : null);
+
+        return $columns;
     }
 
     /**

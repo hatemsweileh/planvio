@@ -10,8 +10,8 @@ use Illuminate\Support\Str;
 
 /**
  * The single gate every piece of user-authored rich text passes through before it is
- * persisted (ARCHITECTURE.md §5.4, §5.6 — `comments.body` and `wiki_pages.content` are
- * documented as *sanitised* HTML).
+ * persisted (ARCHITECTURE.md §5.3–§5.6 — `tasks.description`, `comments.body` and
+ * `wiki_pages.content` are documented as *sanitised* HTML).
  *
  * Sanitisation happens on write, not on render: a stored payload that never contained
  * script cannot be re-introduced by a template that forgets to escape, by an export, by
@@ -69,6 +69,23 @@ final class HtmlSanitizer
         $clean = $this->purifier()->purify($html);
 
         return trim($this->forceLinkRelations($clean));
+    }
+
+    /**
+     * {@see self::sanitize()} for a nullable column.
+     *
+     * An empty result is null rather than an empty string, so "the author cleared this"
+     * and "nothing survived the allow-list" are the same stored state.
+     */
+    public function sanitizeNullable(?string $html): ?string
+    {
+        if ($html === null) {
+            return null;
+        }
+
+        $clean = $this->sanitize($html);
+
+        return $clean === '' ? null : $clean;
     }
 
     /**

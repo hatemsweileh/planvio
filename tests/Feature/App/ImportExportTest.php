@@ -269,6 +269,23 @@ final class ImportExportTest extends TestCase
     }
 
     #[Test]
+    public function an_imported_description_is_stored_without_markup_that_can_run(): void
+    {
+        $component = $this->upload(
+            "Title,Description\n"
+            ."\"Write the notes\",\"<p>Keep this</p><script>alert(1)</script><img src=\"\"https://example.com/a.png\"\" alt=\"\"a\"\" onerror=\"\"alert(1)\"\">\"\n",
+        );
+
+        $component->call('goTo', 3)->set('acknowledged', true)->call('import');
+
+        $description = (string) Task::query()->where('title', 'Write the notes')->value('description');
+
+        $this->assertStringContainsString('Keep this', $description);
+        $this->assertStringNotContainsString('<script', $description);
+        $this->assertStringNotContainsStringIgnoringCase('onerror', $description);
+    }
+
+    #[Test]
     public function a_cell_that_looks_like_a_formula_is_imported_as_plain_text(): void
     {
         $component = $this->upload("Title\n\"=HYPERLINK(\"\"http://evil.test\"\",\"\"Click\"\")\"\n");

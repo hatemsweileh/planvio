@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Enums\Priority;
 use App\Enums\StatusCategory;
 use App\Models\Concerns\BelongsToWorkspace;
+use App\Services\HtmlSanitizer;
 use Database\Factories\TaskFactory;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -260,6 +261,23 @@ final class Task extends Model
     /* ------------------------------------------------------------------ *
      * Derived attributes
      * ------------------------------------------------------------------ */
+
+    /**
+     * Rich text, rendered unescaped on the task page and in the drawer.
+     *
+     * The editor is only one writer. The API, CSV import, duplication and recurring
+     * generation all assign this column directly, so a path that never goes through
+     * the update action still cannot persist a script. Markup that carries no content
+     * is stored as null.
+     *
+     * @return Attribute<?string, ?string>
+     */
+    protected function description(): Attribute
+    {
+        return Attribute::set(static function (?string $value): ?string {
+            return app(HtmlSanitizer::class)->sanitizeNullable($value);
+        });
+    }
 
     /**
      * The human-facing identifier, e.g. "WEB-42".

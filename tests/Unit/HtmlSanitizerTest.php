@@ -277,6 +277,14 @@ final class HtmlSanitizerTest extends TestCase
     }
 
     #[Test]
+    public function a_nullable_description_is_null_when_nothing_survives(): void
+    {
+        $this->assertNull($this->sanitizer->sanitizeNullable(null));
+        $this->assertNull($this->sanitizer->sanitizeNullable('<script>alert(1)</script>'));
+        $this->assertSame('<p>Hi</p>', $this->sanitizer->sanitizeNullable('<p>Hi</p><script>alert(1)</script>'));
+    }
+
+    #[Test]
     public function it_returns_an_empty_string_when_nothing_survives(): void
     {
         $this->assertSame('', $this->sanitizer->sanitize('<script>alert(1)</script>'));

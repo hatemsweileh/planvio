@@ -375,6 +375,54 @@ final class TaskEndpointsTest extends ApiTestCase
     }
 
     #[Test]
+    public function task_descriptions_are_sanitised_on_the_way_in(): void
+    {
+        $payload = '<p>Keep this</p><script>alert(1)</script>'
+            .'<p onclick="alert(1)">Still here</p>'
+            .'<img src="https://example.com/a.png" alt="a" onerror="alert(1)">'
+            .'<a href="javascript:alert(1)">click</a>';
+
+        $created = $this->asToken($this->owner, $this->workspace)->postJson('/api/v1/tasks', [
+            'project_id' => $this->project->getKey(),
+            'title' => 'Notes',
+            'description' => $payload,
+        ]);
+
+        $created->assertCreated();
+
+        $body = (string) $created->json('data.description');
+
+        $this->assertStringContainsString('Keep this', $body);
+        $this->assertStringContainsString('Still here', $body);
+        $this->assertStringNotContainsString('<script', $body);
+        $this->assertStringNotContainsStringIgnoringCase('onerror', $body);
+        $this->assertStringNotContainsStringIgnoringCase('onclick', $body);
+        $this->assertStringNotContainsStringIgnoringCase('javascript:', $body);
+
+        $stored = Task::query()->findOrFail($created->json('data.id'))->description;
+        $this->assertSame($body, $stored);
+
+        $patched = $this->asToken($this->owner, $this->workspace)
+            ->patchJson('/api/v1/tasks/'.$created->json('data.id'), [
+                'description' => '<p>Still fine</p><script>alert(2)</script>',
+            ]);
+
+        $patched->assertOk();
+        $updated = (string) $patched->json('data.description');
+        $this->assertStringContainsString('Still fine', $updated);
+        $this->assertStringNotContainsString('<script', $updated);
+
+        $this->asToken($this->owner, $this->workspace)
+            ->patchJson('/api/v1/tasks/'.$created->json('data.id'), [
+                'description' => '<script>alert(3)</script>',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.description', null);
+
+        $this->assertNull(Task::query()->findOrFail($created->json('data.id'))->description);
+    }
+
+    #[Test]
     public function comment_bodies_are_sanitised_on_the_way_in(): void
     {
         $task = $this->makeTask($this->project);

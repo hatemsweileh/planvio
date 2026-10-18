@@ -317,7 +317,7 @@ index(project_id, position)
 ```
 id, workspace_id, project_id
 number unsignedInteger                 -- per project; display key = "{project.key}-{number}"
-title, description longText nullable
+title, description longText nullable   -- sanitised HTML
 status_id -> task_statuses
 priority (Priority) default 'medium'
 assignee_id nullable -> users, reporter_id -> users
