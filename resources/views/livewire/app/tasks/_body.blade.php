@@ -395,7 +395,15 @@
         </h3>
 
         @if ($editingDescription)
-            <div x-data="richEditor(@js($descriptionDraft), @js(__('Write the detail somebody picking this up would need…')))"
+            {{--
+                The key has to change between reading and editing, and between tasks.
+                The editor host is wire:ignored, so a morph that reuses the same element
+                keeps the previous ProseMirror instance: Edit then shows a toolbar over
+                an empty host, Save leaves that host behind after the buttons have gone,
+                and opening another task shows the draft that was never saved.
+            --}}
+            <div wire:key="description-editor-{{ $task->getKey() }}"
+                 x-data="richEditor(@js($descriptionDraft), @js(__('Write the detail somebody picking this up would need…')))"
                  x-on:editor-input="$wire.set('descriptionDraft', $event.detail.html, false)"
                  wire:ignore
                  class="overflow-hidden rounded-lg border border-[var(--line-DEFAULT)] bg-[var(--surface-panel)]
@@ -427,7 +435,8 @@
                 <p class="ms-auto text-2xs text-[var(--text-subtle)]">{{ __('Formatting is re-checked on the server.') }}</p>
             </div>
         @elseif (filled($task->description))
-            <div class="group relative rounded-lg border border-transparent px-2 py-1.5 transition-colors
+            <div wire:key="description-read-{{ $task->getKey() }}"
+                 class="group relative rounded-lg border border-transparent px-2 py-1.5 transition-colors
                         {{ $canUpdate ? 'hover:border-[var(--line-subtle)] hover:bg-[var(--surface-sunken)]' : '' }}">
                 {{--
                     Stored HTML was sanitised by App\Services\HtmlSanitizer before it was written.

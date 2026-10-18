@@ -10,8 +10,8 @@ use Illuminate\Support\Str;
 
 /**
  * The single gate every piece of user-authored rich text passes through before it is
- * persisted (ARCHITECTURE.md §5.4, §5.6 — `comments.body` and `wiki_pages.content` are
- * documented as *sanitised* HTML).
+ * persisted (ARCHITECTURE.md §5.3–§5.6 — `tasks.description`, `comments.body` and
+ * `wiki_pages.content` are documented as *sanitised* HTML).
  *
  * Sanitisation happens on write, not on render: a stored payload that never contained
  * script cannot be re-introduced by a template that forgets to escape, by an export, by
@@ -28,9 +28,9 @@ final class HtmlSanitizer
     /**
      * Elements, with their permitted attributes, that survive sanitisation.
      */
-    private const ALLOWED = 'p,br,strong,em,u,s,a[href|title],ul,ol,li,blockquote,code,pre,'
-        .'h1,h2,h3,img[src|alt|title|width|height],hr,table,thead,tbody,tr,'
-        .'th[colspan|rowspan],td[colspan|rowspan],span,div';
+    private const ALLOWED = 'p,br,strong,em,u,s,a[href|title],ul[data-type],ol,li[data-type|data-checked],'
+        .'blockquote,code,pre,h1,h2,h3,img[src|alt|title|width|height],hr,table,thead,tbody,tr,'
+        .'th[colspan|rowspan],td[colspan|rowspan],span,div,label,input[type|checked]';
 
     /**
      * Schemes an `href` or `src` may use. Everything else — `javascript:`, `data:`,
@@ -67,8 +67,26 @@ final class HtmlSanitizer
         }
 
         $clean = $this->purifier()->purify($html);
+        $clean = $this->stripNonCheckboxInputs($clean);
 
         return trim($this->forceLinkRelations($clean));
+    }
+
+    /**
+     * {@see self::sanitize()} for a nullable column.
+     *
+     * An empty result is null rather than an empty string, so "the author cleared this"
+     * and "nothing survived the allow-list" are the same stored state.
+     */
+    public function sanitizeNullable(?string $html): ?string
+    {
+        if ($html === null) {
+            return null;
+        }
+
+        $clean = $this->sanitize($html);
+
+        return $clean === '' ? null : $clean;
     }
 
     /**
@@ -113,7 +131,12 @@ final class HtmlSanitizer
         $config->set('HTML.Doctype', 'HTML 4.01 Transitional');
         $config->set('HTML.Allowed', self::ALLOWED);
         $config->set('URI.AllowedSchemes', self::ALLOWED_SCHEMES);
-
+        // label and input live in the Forms module, which is off unless this is set,
+        // so naming them in the allow-list otherwise errors. The allow-list still
+        // admits only those two, and only type and checked on the input; the
+        // checkbox pass below drops every other input the module's type list would
+        // otherwise have permitted.
+        $config->set('HTML.Forms', true);
         // An `id` in user content can shadow application markup and break DOM lookups.
         $config->set('Attr.EnableID', false);
         // Drop an <img> whose src did not survive scheme filtering instead of rendering
@@ -133,6 +156,24 @@ final class HtmlSanitizer
             $config->set('Cache.DefinitionImpl', null);
         }
 
+        // TipTap's checklist is a ul/li with data-type and data-checked. Those attributes
+        // are not part of the stock allow-list, so without this a saved checklist comes
+        // back as a plain list and the ticks are gone. The rev is part of the serializer
+        // cache key: bump it when the attributes change or a warm cache keeps the old set.
+        // Reading the raw definition finalises the config, so every set() above has to
+        // happen first.
+        $config->set('HTML.DefinitionID', 'planvio-rich-text');
+        $config->set('HTML.DefinitionRev', 2);
+
+        if ($definition = $config->maybeGetRawHTMLDefinition()) {
+            // The s: prefix keeps the comparison case-sensitive. Without it the
+            // value is lower-cased before the check, so taskList never matches
+            // and the attribute is dropped.
+            $definition->addAttribute('ul', 'data-type', 'Enum#s:taskList');
+            $definition->addAttribute('li', 'data-type', 'Enum#s:taskItem');
+            $definition->addAttribute('li', 'data-checked', 'Enum#true,false');
+        }
+
         return $config;
     }
 
@@ -149,6 +190,31 @@ final class HtmlSanitizer
         }
 
         return is_writable($path) ? $path : null;
+    }
+
+    /**
+     * Drop every input that is not a checkbox.
+     *
+     * The allow-list has to permit `input` so a checklist tick survives, and the stock
+     * definition of `type` is wider than checkbox. Anything else — a text field, an image
+     * input, a button — is removed here rather than stored. A checkbox is kept, including
+     * one whose type survived but whose event handlers did not: those never get this far.
+     */
+    private function stripNonCheckboxInputs(string $html): string
+    {
+        if (stripos($html, '<input') === false) {
+            return $html;
+        }
+
+        $stripped = preg_replace_callback(
+            '/<input\b[^>]*>/i',
+            static function (array $match): string {
+                return preg_match('/\btype="checkbox"/i', $match[0]) === 1 ? $match[0] : '';
+            },
+            $html,
+        );
+
+        return $stripped ?? $html;
     }
 
     /**

@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\ActivityLogger;
 use App\Services\PositionExhausted;
 use App\Services\TaskOrderingService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -58,6 +59,12 @@ final class MoveTask
         // it drew before the drop, not the one it wants.
         $beforeTaskId = $beforeTaskId === $taskId ? null : $beforeTaskId;
         $afterTaskId = $afterTaskId === $taskId ? null : $afterTaskId;
+
+        // Dropping a card back where it already sits is not a move. Writing a new
+        // position and a "moved" entry for it makes the feed lie and the column flicker.
+        if ($fromStatusId === $toStatusId && $this->alreadyBetween($task, $beforeTaskId, $afterTaskId)) {
+            return $task;
+        }
 
         DB::transaction(function () use (
             $task,
@@ -138,6 +145,48 @@ final class MoveTask
         } catch (PositionExhausted) {
             return null;
         }
+    }
+
+    /**
+     * Whether the card is already between these two neighbours in its current column.
+     *
+     * Null on either side means "there is no card there", which is also what the client
+     * sends for the ends of a column. A drop that names the same neighbours did not move.
+     */
+    private function alreadyBetween(Task $task, ?int $beforeTaskId, ?int $afterTaskId): bool
+    {
+        $statusId = (int) $task->status_id;
+        $position = (float) $task->position;
+        $taskId = (int) $task->getKey();
+
+        $above = Task::query()
+            ->where('status_id', $statusId)
+            ->whereKeyNot($taskId)
+            ->where(function (Builder $query) use ($position, $taskId): void {
+                $query->where('position', '<', $position)
+                    ->orWhere(function (Builder $query) use ($position, $taskId): void {
+                        $query->where('position', $position)->where('id', '<', $taskId);
+                    });
+            })
+            ->orderByDesc('position')
+            ->orderByDesc('id')
+            ->value('id');
+
+        $below = Task::query()
+            ->where('status_id', $statusId)
+            ->whereKeyNot($taskId)
+            ->where(function (Builder $query) use ($position, $taskId): void {
+                $query->where('position', '>', $position)
+                    ->orWhere(function (Builder $query) use ($position, $taskId): void {
+                        $query->where('position', $position)->where('id', '>', $taskId);
+                    });
+            })
+            ->orderBy('position')
+            ->orderBy('id')
+            ->value('id');
+
+        return ($above === null ? null : (int) $above) === $beforeTaskId
+            && ($below === null ? null : (int) $below) === $afterTaskId;
     }
 
     /**

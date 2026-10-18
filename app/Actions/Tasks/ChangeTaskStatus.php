@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Tasks;
 
 use App\Events\Tasks\TaskStatusChanged;
+use App\Models\Activity;
 use App\Models\Task;
 use App\Models\TaskStatus;
 use App\Models\User;
@@ -45,33 +46,54 @@ final class ChangeTaskStatus
         $from = $task->relationLoaded('status') ? $task->getRelation('status') : $task->status()->first();
         $wasCompleted = $task->completed_at !== null;
         $isCompleted = $status->is_completed || $status->category->isClosed();
+        $leavingDone = $from instanceof TaskStatus && $from->category->isCompleted() && ! $status->category->isCompleted();
 
-        DB::transaction(function () use ($task, $status, $actor, $from, $wasCompleted, $isCompleted): void {
+        DB::transaction(function () use ($task, $status, $actor, $from, $wasCompleted, $isCompleted, $leavingDone): void {
             $task->status_id = $status->getKey();
 
             // Closing stamps the moment; reopening clears it. Cancelled counts as closed —
             // no further work is expected — but only Done says the work was finished, so that
             // is the only category that drives progress to 100.
+            //
+            // The 100 is not left behind when the task is reopened. Nothing in the product
+            // edits progress by hand, so a reopened task stuck at 100 would claim to be
+            // finished. A checklist is the work itself, so it wins: progress becomes the
+            // share of its items that are ticked. With no checklist, the progress from
+            // before the task was closed is put back. That earlier value is recorded on
+            // the activity row written when progress was forced to 100.
+            $previousProgress = null;
+
             if ($isCompleted) {
                 $task->completed_at = $wasCompleted ? $task->completed_at : Carbon::now();
 
-                if ($status->category->isCompleted()) {
+                if ($status->category->isCompleted() && (int) $task->progress !== 100) {
+                    $previousProgress = (int) $task->progress;
                     $task->progress = 100;
                 }
             } else {
                 $task->completed_at = null;
+
+                if ($leavingDone) {
+                    $task->progress = $this->progressAfterReopening($task);
+                }
             }
 
             $task->save();
 
-            $this->activity->record($task, 'status_changed', $actor, [
+            $properties = [
                 'attribute' => 'status_id',
                 'old' => $from === null ? null : (int) $from->getKey(),
                 'new' => (int) $status->getKey(),
                 'old_status' => $from?->name,
                 'new_status' => $status->name,
                 'completed' => $isCompleted,
-            ]);
+            ];
+
+            if ($previousProgress !== null) {
+                $properties['previous_progress'] = $previousProgress;
+            }
+
+            $this->activity->record($task, 'status_changed', $actor, $properties);
         });
 
         $task->setRelation('status', $status);
@@ -81,6 +103,45 @@ final class ChangeTaskStatus
         $this->notifyWatchers($task, $from, $status, $actor);
 
         return $task;
+    }
+
+    /**
+     * Progress for a task that has just left a Done column.
+     *
+     * Checklist items are counted rather than trusted from a cached percentage, because
+     * the ticks are the work. Without any, the value saved when the task was closed is
+     * restored; a task that was created already done has nothing to restore and starts
+     * again at zero.
+     */
+    private function progressAfterReopening(Task $task): int
+    {
+        $total = $task->checklistItems()->count();
+
+        if ($total > 0) {
+            $done = $task->checklistItems()->where('is_done', true)->count();
+
+            return (int) round(($done / $total) * 100);
+        }
+
+        $activities = Activity::query()
+            ->where('subject_type', $task->getMorphClass())
+            ->where('subject_id', $task->getKey())
+            ->where('event', 'status_changed')
+            ->orderByDesc('id')
+            ->limit(20)
+            ->get();
+
+        foreach ($activities as $activity) {
+            $properties = $activity->properties;
+
+            if (! is_array($properties) || ! array_key_exists('previous_progress', $properties)) {
+                continue;
+            }
+
+            return max(0, min(100, (int) $properties['previous_progress']));
+        }
+
+        return 0;
     }
 
     /**

@@ -277,6 +277,43 @@ final class HtmlSanitizerTest extends TestCase
     }
 
     #[Test]
+    public function a_checklist_keeps_its_ticks_and_loses_anything_else_an_input_could_do(): void
+    {
+        $clean = $this->sanitizer->sanitize(
+            '<ul data-type="taskList">'
+            .'<li data-type="taskItem" data-checked="true">'
+            .'<label><input type="checkbox" checked="checked"><span></span></label>'
+            .'<div><p>Done</p></div>'
+            .'</li>'
+            .'<li data-type="taskItem" data-checked="false">'
+            .'<label><input type="checkbox"><span></span></label>'
+            .'<div><p>Not yet</p></div>'
+            .'</li>'
+            .'</ul>'
+            .'<input type="text" name="x">'
+            .'<input type="checkbox" onclick="alert(1)">',
+        );
+
+        $this->assertStringContainsString('data-type="taskList"', $clean);
+        $this->assertStringContainsString('data-type="taskItem"', $clean);
+        $this->assertStringContainsString('data-checked="true"', $clean);
+        $this->assertStringContainsString('data-checked="false"', $clean);
+        $this->assertStringContainsString('type="checkbox"', $clean);
+        $this->assertStringContainsString('Done', $clean);
+        $this->assertStringNotContainsString('type="text"', $clean);
+        $this->assertStringNotContainsStringIgnoringCase('onclick', $clean);
+        $this->assertStringNotContainsString('name="x"', $clean);
+    }
+
+    #[Test]
+    public function a_nullable_description_is_null_when_nothing_survives(): void
+    {
+        $this->assertNull($this->sanitizer->sanitizeNullable(null));
+        $this->assertNull($this->sanitizer->sanitizeNullable('<script>alert(1)</script>'));
+        $this->assertSame('<p>Hi</p>', $this->sanitizer->sanitizeNullable('<p>Hi</p><script>alert(1)</script>'));
+    }
+
+    #[Test]
     public function it_returns_an_empty_string_when_nothing_survives(): void
     {
         $this->assertSame('', $this->sanitizer->sanitize('<script>alert(1)</script>'));

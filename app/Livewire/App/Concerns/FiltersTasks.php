@@ -147,7 +147,7 @@ trait FiltersTasks
      * @param Builder<Task> $query
      * @return Builder<Task>
      */
-    public function applyTaskFilters(Builder $query): Builder
+    public function applyTaskFilters(Builder $query, bool $keepCompleted = false): Builder
     {
         $term = trim($this->search);
 
@@ -199,7 +199,7 @@ trait FiltersTasks
 
         $this->applyDueRange($query);
 
-        if (! $this->includeCompleted && ! $this->showsCompletedExplicitly()) {
+        if (! $keepCompleted && ! $this->includeCompleted && ! $this->showsCompletedExplicitly()) {
             $query->whereNull('tasks.completed_at');
         }
 

@@ -122,10 +122,20 @@ document.addEventListener('alpine:init', () => {
                 chosenClass: 'sortable-chosen',
                 handle: '[data-drag-handle]',
                 filter: '[data-no-drag]',
-                delay: 40,
+                // A finger that rests, then scrolls, must not pick the card up. 40ms is
+                // shorter than that pause, so a scroll that starts after a brief rest
+                // becomes a drag. A long-press is the touch gesture; a mouse still drags
+                // immediately because the delay applies to touch only.
+                delay: 250,
                 delayOnTouchOnly: true,
                 touchStartThreshold: 6,
                 onEnd: (event) => {
+                    // Dropping a card back into its own slot is not a move. Calling the
+                    // server anyway rewrites the position and writes a "moved" entry.
+                    if (event.from === event.to && event.oldIndex === event.newIndex) {
+                        return;
+                    }
+
                     const item = event.item;
                     const list = event.to;
                     const cards = Array.from(list.querySelectorAll('[data-task-id]'));
@@ -172,67 +182,81 @@ document.addEventListener('alpine:init', () => {
      * Rich text editor. Emits HTML which the server re-sanitises with HTMLPurifier —
      * client-side output is never trusted.
      */
-    Alpine.data('richEditor', (initial = '', placeholder = '', readOnly = false) => ({
-        editor: null,
-        html: initial,
-        init() {
-            this.editor = new Editor({
-                element: this.$refs.editor,
-                editable: !readOnly,
-                extensions: [
-                    StarterKit.configure({
-                        heading: { levels: [1, 2, 3] },
-                        codeBlock: { HTMLAttributes: { class: 'not-prose' } },
-                    }),
-                    Placeholder.configure({ placeholder }),
-                    Link.configure({
-                        openOnClick: false,
-                        autolink: true,
-                        protocols: ['http', 'https', 'mailto'],
-                        HTMLAttributes: { rel: 'noopener noreferrer nofollow', target: '_blank' },
-                    }),
-                    TaskList,
-                    TaskItem.configure({ nested: true }),
-                ],
-                content: initial,
-                editorProps: {
-                    attributes: {
-                        class: 'prose-planvio focus:outline-none min-h-24 px-3 py-2',
-                        /*
-                         * The page's direction is the reader's; what is typed in here is the
-                         * writer's, and the two are not the same fact. Without this an
-                         * English wiki page is composed right-to-left inside an Arabic
-                         * interface and then read left-to-right afterwards, because the
-                         * rendered page already carries dir="auto" — the editor and the
-                         * document it produces disagreed about the same text.
-                         */
-                        dir: 'auto',
-                    },
-                },
-                onUpdate: ({ editor }) => {
-                    this.html = editor.isEmpty ? '' : editor.getHTML();
-                    this.$dispatch('editor-input', { html: this.html });
-                },
-            });
+    Alpine.data('richEditor', (initial = '', placeholder = '', readOnly = false) => {
+        // The editor must not live on the Alpine component. Alpine proxies `this`, and
+        // ProseMirror rejects a proxied transaction with "Applying a mismatched
+        // transaction", which is what every toolbar button was throwing. A closure
+        // variable is invisible to that proxy, so commands and the active-state check
+        // see the real editor.
+        let editor = null;
 
-            // Livewire may re-render around us; keep the document in sync without
-            // stomping on the user's cursor while they are typing.
-            this.$watch('html', (value) => {
-                if (this.editor && !this.editor.isFocused && value !== this.editor.getHTML()) {
-                    this.editor.commands.setContent(value || '', false);
-                }
-            });
-        },
-        destroy() {
-            this.editor?.destroy();
-        },
-        run(command, ...args) {
-            this.editor?.chain().focus()[command](...args).run();
-        },
-        isActive(name, attrs = {}) {
-            return this.editor?.isActive(name, attrs) ?? false;
-        },
-    }));
+        return {
+            html: initial,
+            init() {
+                editor = new Editor({
+                    element: this.$refs.editor,
+                    editable: !readOnly,
+                    extensions: [
+                        // StarterKit already registers Link, with openOnClick left on. Registering
+                        // it again warns about the duplicate and the kit's copy is the one that
+                        // opens a tab when a link is clicked while editing. Turn the kit's off
+                        // and keep the one configured below.
+                        StarterKit.configure({
+                            heading: { levels: [1, 2, 3] },
+                            codeBlock: { HTMLAttributes: { class: 'not-prose' } },
+                            link: false,
+                        }),
+                        Placeholder.configure({ placeholder }),
+                        Link.configure({
+                            openOnClick: false,
+                            autolink: true,
+                            protocols: ['http', 'https', 'mailto'],
+                            HTMLAttributes: { rel: 'noopener noreferrer nofollow', target: '_blank' },
+                        }),
+                        TaskList,
+                        TaskItem.configure({ nested: true }),
+                    ],
+                    content: initial,
+                    editorProps: {
+                        attributes: {
+                            class: 'prose-planvio focus:outline-none min-h-24 px-3 py-2',
+                            /*
+                             * The page's direction is the reader's; what is typed in here is the
+                             * writer's, and the two are not the same fact. Without this an
+                             * English wiki page is composed right-to-left inside an Arabic
+                             * interface and then read left-to-right afterwards, because the
+                             * rendered page already carries dir="auto" — the editor and the
+                             * document it produces disagreed about the same text.
+                             */
+                            dir: 'auto',
+                        },
+                    },
+                    onUpdate: ({ editor: current }) => {
+                        this.html = current.isEmpty ? '' : current.getHTML();
+                        this.$dispatch('editor-input', { html: this.html });
+                    },
+                });
+
+                // Livewire may re-render around us; keep the document in sync without
+                // stomping on the user's cursor while they are typing.
+                this.$watch('html', (value) => {
+                    if (editor && !editor.isFocused && value !== editor.getHTML()) {
+                        editor.commands.setContent(value || '', false);
+                    }
+                });
+            },
+            destroy() {
+                editor?.destroy();
+                editor = null;
+            },
+            run(command, ...args) {
+                editor?.chain().focus()[command](...args).run();
+            },
+            isActive(name, attrs = {}) {
+                return editor?.isActive(name, attrs) ?? false;
+            },
+        };
+    });
 
     /**
      * Global keyboard shortcuts. Deliberately inert while the user is typing so

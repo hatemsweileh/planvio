@@ -113,6 +113,44 @@ final class TaskBoard extends Component
     }
 
     /**
+     * Completed tasks the board is hiding, per column.
+     *
+     * The header count and the cards both come from the filtered query, which drops
+     * completed work until it is asked for. A Done column then reads 0 and "Nothing
+     * here" while it is holding cards. This is the other number, so the column can say
+     * that the work is hidden instead.
+     *
+     * @return array<int, int>
+     */
+    #[Computed]
+    public function hiddenCompletedCounts(): array
+    {
+        if ($this->includeCompleted || $this->showsCompletedExplicitly()) {
+            return [];
+        }
+
+        $rows = $this->applyTaskFilters(
+            Task::query()->forProject($this->project)->whereNull('tasks.parent_id'),
+            keepCompleted: true,
+        )
+            ->whereNotNull('tasks.completed_at')
+            ->reorder()
+            ->toBase()
+            ->select('tasks.status_id')
+            ->selectRaw('count(*) as aggregate')
+            ->groupBy('tasks.status_id')
+            ->get();
+
+        $counts = [];
+
+        foreach ($rows as $row) {
+            $counts[(int) $row->status_id] = (int) $row->aggregate;
+        }
+
+        return $counts;
+    }
+
+    /**
      * The cards currently on the board, keyed by status id.
      *
      * @return array<int, EloquentCollection<int, Task>>
@@ -195,7 +233,7 @@ final class TaskBoard extends Component
         if (! $task instanceof Task || ! $status instanceof TaskStatus) {
             // The board the browser is holding no longer matches the database. Redrawing is
             // the honest answer; it puts the card back where it really is.
-            unset($this->cards, $this->counts);
+            unset($this->cards, $this->counts, $this->hiddenCompletedCounts);
 
             return;
         }
@@ -203,23 +241,35 @@ final class TaskBoard extends Component
         $task->setRelation('project', $this->project);
         $task->setRelation('workspace', $this->workspace);
 
-        $this->authorize('move', $task);
+        // A refused drag must put the card back and say why. authorize() turns into
+        // Livewire's HTML error modal, which is what a member sees after dropping
+        // someone else's card. The card never left the database; redrawing it is the
+        // snap back.
+        if ($this->user()->cannot('move', $task)) {
+            unset($this->cards, $this->counts, $this->hiddenCompletedCounts);
+
+            $this->dispatch('planvio-notify', type: 'error', message: __('You cannot move this task.'));
+
+            return;
+        }
 
         $from = (int) $task->status_id;
 
         try {
             app(MoveTask::class)($task, $status, $beforeTaskId, $afterTaskId, $this->user());
         } catch (DomainException $exception) {
-            unset($this->cards, $this->counts);
+            unset($this->cards, $this->counts, $this->hiddenCompletedCounts);
 
             $this->dispatch('planvio-notify', type: 'error', message: $exception->getMessage());
 
             return;
         }
 
-        unset($this->cards, $this->counts);
+        unset($this->cards, $this->counts, $this->hiddenCompletedCounts);
 
-        $this->dispatch('task-updated', taskId: $taskId);
+        // The board listens for task-updated so an edit in the drawer redraws it. Dispatching
+        // the same event here makes the browser call this component again, which is a second
+        // full render of a board that this request already redrew.
 
         if ($from !== (int) $status->getKey()) {
             $this->dispatch(
@@ -238,6 +288,14 @@ final class TaskBoard extends Component
      */
     public function moveToStatus(int $taskId, int $statusId): void
     {
+        $task = Task::query()->forProject($this->project)->whereKey($taskId)->first();
+
+        // The menu lists the column the card is already in. Choosing it is not a request
+        // to send the card to the bottom, and it is not a move worth recording.
+        if ($task instanceof Task && (int) $task->status_id === $statusId) {
+            return;
+        }
+
         $this->moveTask($taskId, $statusId, null, null);
     }
 
@@ -273,7 +331,7 @@ final class TaskBoard extends Component
 
     protected function forgetTaskCaches(): void
     {
-        unset($this->cards, $this->counts, $this->columns, $this->statusOptions);
+        unset($this->cards, $this->counts, $this->hiddenCompletedCounts, $this->columns, $this->statusOptions);
     }
 
     private function user(): User

@@ -708,7 +708,7 @@ otherwise carry fifty copies of it.
 |---|---|---|
 | `project_id` | yes | must be in this workspace |
 | `title` | yes | max 255 |
-| `description` | no | |
+| `description` | no | HTML, sanitised on the way in |
 | `status_id` | no | a column of *that* project; defaults to the board's default |
 | `priority` | no | defaults to `medium` |
 | `assignee_id` | no | must be a member of this workspace |
@@ -784,8 +784,8 @@ curl -s -X POST https://planvio.example.com/api/v1/tasks \
 
 #### `PATCH /api/v1/tasks/{id}`
 
-Accepts `title`, `description`, `priority`, `assignee_id`, `milestone_id`, `start_date`,
-`due_date`, `estimate_minutes`, `progress`.
+Accepts `title`, `description` (HTML, sanitised on the way in), `priority`, `assignee_id`,
+`milestone_id`, `start_date`, `due_date`, `estimate_minutes`, `progress`.
 
 A key sent as `null` clears the column; a key you do not send is left alone. `{"due_date":
 null}` clears the date, `{}` does nothing.

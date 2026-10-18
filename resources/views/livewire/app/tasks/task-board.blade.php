@@ -64,6 +64,8 @@
                         $statusId = (int) $status->getKey();
                         $columnCards = $cards[$statusId] ?? collect();
                         $count = $counts[$statusId] ?? 0;
+                        $hidden = $this->hiddenCompletedCounts[$statusId] ?? 0;
+                        $hidingDone = $columnCards->isEmpty() && $hidden > 0;
                     @endphp
 
                     <section wire:key="column-{{ $statusId }}"
@@ -79,7 +81,7 @@
                                 {{ $status->name }}
                             </h2>
                             <span class="rounded bg-[var(--surface-active)] px-1.5 text-2xs font-medium tabular-nums
-                                         text-[var(--text-muted)]">{{ $count }}</span>
+                                         text-[var(--text-muted)]">{{ $hidingDone ? $hidden : $count }}</span>
 
                             @can('task.create', $project)
                                 <x-ui.tooltip :label="__('Add to :column', ['column' => $status->name])">
@@ -103,7 +105,18 @@
                                     @include('livewire.app.tasks._card', ['task' => $task])
                                 @endforeach
 
-                                @if ($columnCards->isEmpty())
+                                @if ($hidingDone)
+                                    {{-- The cards are filtered out, not absent. "Nothing here" would be a lie,
+                                         and a count of 0 next to it is how a drop into Done looks like it vanished. --}}
+                                    <p class="rounded-md border border-dashed border-[var(--line-DEFAULT)] px-3 py-6
+                                              text-center text-2xs leading-relaxed text-[var(--text-subtle)]">
+                                        {{ __('Done work is hidden.') }}<br>
+                                        <button type="button" wire:click="$set('includeCompleted', true)"
+                                                class="mt-1 font-medium text-[var(--accent)] hover:underline">
+                                            {{ __('Show done') }}
+                                        </button>
+                                    </p>
+                                @elseif ($columnCards->isEmpty())
                                     {{-- A real drop target, not just a message: an empty column must accept a card. --}}
                                     <p class="rounded-md border border-dashed border-[var(--line-DEFAULT)] px-3 py-6
                                               text-center text-2xs leading-relaxed text-[var(--text-subtle)]">
