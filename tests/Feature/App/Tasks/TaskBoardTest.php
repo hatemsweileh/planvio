@@ -8,8 +8,10 @@ use App\Enums\Priority;
 use App\Enums\StatusCategory;
 use App\Enums\WorkspaceRole;
 use App\Livewire\App\Tasks\TaskBoard;
+use App\Models\Activity;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\TaskChecklistItem;
 use App\Models\TaskStatus;
 use App\Models\User;
 use App\Models\Workspace;
@@ -93,10 +95,21 @@ final class TaskBoardTest extends TestCase
         $closed = $this->task('Shipped', $this->done, 1000);
         $closed->forceFill(['completed_at' => Carbon::now()])->save();
 
-        $this->board()
+        $component = $this->board()
             ->assertDontSee('Shipped')
+            ->assertSee('Done work is hidden.');
+
+        // To Do and In Progress really are empty. Completed holds a hidden task and
+        // must not use their copy, so the phrase appears once per empty column.
+        $this->assertSame(
+            2,
+            substr_count($component->html(), 'Nothing here.'),
+        );
+
+        $component
             ->set('includeCompleted', true)
-            ->assertSee('Shipped');
+            ->assertSee('Shipped')
+            ->assertDontSee('Done work is hidden.');
     }
 
     /* ------------------------------------------------------------------ *
@@ -144,6 +157,19 @@ final class TaskBoardTest extends TestCase
         $this->board()->call('moveTask', $mover->getKey(), $this->todo->getKey(), $last->getKey(), null);
 
         $this->assertSame(['First', 'Last', 'Mover'], $this->orderIn($this->todo));
+    }
+
+    #[Test]
+    public function moving_a_card_does_not_ask_the_board_to_redraw_itself(): void
+    {
+        $mover = $this->task('Mover', $this->todo, 1000);
+
+        // task-updated is how the drawer tells the board to redraw. The board also
+        // listens for it, so dispatching it from a drop makes the browser render
+        // the board a second time for a change this request already applied.
+        $this->board()
+            ->call('moveTask', $mover->getKey(), $this->doing->getKey(), null, null)
+            ->assertNotDispatched('task-updated');
     }
 
     #[Test]
@@ -227,10 +253,100 @@ final class TaskBoardTest extends TestCase
             Livewire::actingAs($guest)
                 ->test(TaskBoard::class, ['workspace' => $this->workspace, 'project' => $this->project])
                 ->call('moveTask', $mover->getKey(), $this->doing->getKey(), null, null)
-                ->assertForbidden();
+                ->assertDispatched('planvio-notify', type: 'error', message: 'You cannot move this task.');
         });
 
         $this->assertSame((int) $this->todo->getKey(), (int) $mover->refresh()->status_id);
+    }
+
+    #[Test]
+    public function a_card_the_viewer_cannot_move_is_not_a_drag_handle(): void
+    {
+        $plain = $this->makeMember($this->workspace, WorkspaceRole::Member);
+        $this->project->members()->attach($plain->getKey(), [
+            'role' => 'member', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->task('Someone else', $this->todo, 1000);
+
+        $html = $this->inWorkspace($this->workspace, fn () => Livewire::actingAs($plain)
+            ->test(TaskBoard::class, ['workspace' => $this->workspace, 'project' => $this->project])
+            ->html());
+
+        $this->assertStringNotContainsString('data-drag-handle', $html);
+    }
+
+    #[Test]
+    public function dropping_a_card_back_into_its_own_slot_changes_nothing(): void
+    {
+        $above = $this->task('Above', $this->todo, 1000);
+        $mover = $this->task('Mover', $this->todo, 2000);
+        $below = $this->task('Below', $this->todo, 3000);
+        $position = (string) $mover->position;
+
+        $this->board()->call('moveTask', $mover->getKey(), $this->todo->getKey(), $above->getKey(), $below->getKey());
+
+        $this->assertSame($position, (string) $mover->refresh()->position);
+        $this->assertSame(['Above', 'Mover', 'Below'], $this->orderIn($this->todo));
+        $this->assertSame(
+            0,
+            Activity::query()->where('event', 'moved')->where('subject_id', $mover->getKey())->count(),
+        );
+    }
+
+    #[Test]
+    public function choosing_the_cards_own_column_does_not_move_it(): void
+    {
+        $above = $this->task('Above', $this->todo, 1000);
+        $mover = $this->task('Mover', $this->todo, 2000);
+        $position = (string) $mover->position;
+
+        $this->board()->call('moveToStatus', $mover->getKey(), $this->todo->getKey());
+
+        $this->assertSame($position, (string) $mover->refresh()->position);
+        $this->assertSame(['Above', 'Mover'], $this->orderIn($this->todo));
+        $this->assertSame(
+            0,
+            Activity::query()->where('event', 'moved')->where('subject_id', $mover->getKey())->count(),
+        );
+    }
+
+    #[Test]
+    public function reopening_a_task_does_not_leave_it_at_full_progress(): void
+    {
+        $mover = $this->task('Mover', $this->todo, 1000, ['progress' => 40]);
+
+        $this->board()->call('moveTask', $mover->getKey(), $this->done->getKey(), null, null);
+        $this->assertSame(100, $mover->refresh()->progress);
+
+        $this->board()->call('moveTask', $mover->getKey(), $this->todo->getKey(), null, null);
+
+        $this->assertNull($mover->refresh()->completed_at);
+        $this->assertSame(40, $mover->progress);
+    }
+
+    #[Test]
+    public function reopening_a_task_with_a_checklist_follows_the_ticks(): void
+    {
+        $mover = $this->task('Mover', $this->todo, 1000, ['progress' => 40]);
+
+        TaskChecklistItem::query()->create([
+            'task_id' => $mover->getKey(),
+            'title' => 'One',
+            'is_done' => true,
+            'position' => 1,
+        ]);
+        TaskChecklistItem::query()->create([
+            'task_id' => $mover->getKey(),
+            'title' => 'Two',
+            'is_done' => false,
+            'position' => 2,
+        ]);
+
+        $this->board()->call('moveTask', $mover->getKey(), $this->done->getKey(), null, null);
+        $this->board()->call('moveTask', $mover->getKey(), $this->todo->getKey(), null, null);
+
+        $this->assertSame(50, $mover->refresh()->progress);
     }
 
     /* ------------------------------------------------------------------ *

@@ -234,6 +234,40 @@ final class TaskDrawerTest extends TestCase
         $this->assertStringNotContainsString('<script', $description);
     }
 
+    #[Test]
+    public function editing_a_description_replaces_the_reading_host(): void
+    {
+        $key = $this->task->getKey();
+        $reading = $this->open()->html();
+
+        // The editor host is wire:ignored. Reusing it across the reading and editing
+        // branches keeps a stale ProseMirror instance, so the two states have to be
+        // different elements.
+        $this->assertStringContainsString('wire:key="description-read-'.$key.'"', $reading);
+        $this->assertStringNotContainsString('wire:key="description-editor-'.$key.'"', $reading);
+
+        $editing = $this->open()->call('startEditingDescription')->html();
+
+        $this->assertStringContainsString('wire:key="description-editor-'.$key.'"', $editing);
+        $this->assertStringNotContainsString('wire:key="description-read-'.$key.'"', $editing);
+    }
+
+    #[Test]
+    public function the_description_edit_button_sits_on_the_corner(): void
+    {
+        $html = $this->open()->html();
+
+        $this->assertSame(
+            1,
+            preg_match('/<button\b[^>]*startEditingDescription[^>]*>/', $html, $button),
+        );
+
+        $this->assertMatchesRegularExpression('/\babsolute\b/', $button[0]);
+        $this->assertMatchesRegularExpression('/\bend-2\b/', $button[0]);
+        $this->assertMatchesRegularExpression('/\btop-2\b/', $button[0]);
+        $this->assertDoesNotMatchRegularExpression('/(?:^|[\s"\'])relative(?:[\s"\']|$)/', $button[0]);
+    }
+
     /* ------------------------------------------------------------------ *
      * Checklist and subtasks
      * ------------------------------------------------------------------ */

@@ -1,10 +1,11 @@
 {{--
     One board card.
 
-    The whole card is the drag handle, so there is no thin grip to hunt for, and the status
-    menu is marked `data-no-drag` so reaching for it never starts a drag. That menu is not a
-    convenience: it is the keyboard and touch route to the same move, and dragging must
-    never be the only way to do something.
+    The whole card is the drag handle when this person may move it, so there is no thin
+    grip to hunt for. Someone who may not — a guest, or a member on a task that is not
+    theirs — gets no handle, because a drag that the server refuses becomes an error
+    modal. The status menu is marked `data-no-drag` so reaching for it never starts a
+    drag. That menu is the keyboard and touch route to the same move.
 --}}
 @php
     $subtasks = $task->relationLoaded('subtasks') ? $task->getRelation('subtasks') : collect();
@@ -15,10 +16,10 @@
 
 <article wire:key="card-{{ $task->getKey() }}"
          data-task-id="{{ $task->getKey() }}"
-         data-drag-handle
-         class="group cursor-grab rounded-lg border border-[var(--line-subtle)] bg-[var(--surface-panel)] p-2.5
+         @if ($canUpdate) data-drag-handle @endif
+         class="group rounded-lg border border-[var(--line-subtle)] bg-[var(--surface-panel)] p-2.5
                 shadow-panel transition-[border-color,box-shadow] hover:border-[var(--line-DEFAULT)]
-                hover:shadow-raised active:cursor-grabbing">
+                hover:shadow-raised {{ $canUpdate ? 'cursor-grab active:cursor-grabbing' : '' }}">
 
     <div class="flex items-start gap-2">
         <a href="{{ route('app.tasks.show', [$workspace, $task]) }}"
@@ -38,7 +39,8 @@
                         <button type="button"
                                 class="grid size-6 place-items-center rounded text-[var(--text-subtle)] opacity-0
                                        transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-DEFAULT)]
-                                       focus-visible:opacity-100 group-hover:opacity-100"
+                                       focus-visible:opacity-100 group-hover:opacity-100
+                                       pointer-coarse:opacity-100 [@media(hover:none)]:opacity-100"
                                 aria-label="{{ __('Move :key to another column', ['key' => $task->key]) }}">
                             <x-icon.dots class="size-4" />
                         </button>

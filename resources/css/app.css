@@ -666,6 +666,15 @@
         cursor: grabbing;
     }
 
+    /*
+     * The empty-column note is a sibling of the cards, rendered by the server. A drop
+     * inserts the card before the server answers, so the note would sit under the card
+     * until that answer arrives. Hide it as soon as the column actually holds one.
+     */
+    [data-status-id]:has([data-task-id]) > p {
+        display: none;
+    }
+
     .animate-in {
         animation: planvio-in 160ms var(--ease-snap) both;
     }
@@ -887,6 +896,9 @@
     .prose-planvio h3 { font-size: 1.05rem; margin-top: 1.4em; }
     .prose-planvio a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
     .prose-planvio ul { list-style: disc; padding-inline-start: 1.4em; }
+    .prose-planvio ul[data-type="taskList"] { list-style: none; padding-inline-start: 0; }
+    .prose-planvio li[data-type="taskItem"] { list-style: none; }
+    .prose-planvio li[data-type="taskItem"] > label { margin-inline-end: 0.4em; }
     .prose-planvio ol { list-style: decimal; padding-inline-start: 1.4em; }
     .prose-planvio li + li { margin-top: 0.35em; }
     .prose-planvio blockquote {

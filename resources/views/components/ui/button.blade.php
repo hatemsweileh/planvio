@@ -9,7 +9,14 @@
 ])
 
 @php
-    $base = 'relative inline-flex items-center justify-center gap-1.5 font-medium whitespace-nowrap '
+    // `relative` is the positioning context for the loading spinner. A caller that
+    // places the button itself with `absolute` must not also receive `relative`:
+    // both utilities set `position`, and `relative` wins in the stylesheet, so the
+    // button stays in normal flow. An absolutely positioned button is already a
+    // containing block for that spinner.
+    $callerClass = (string) $attributes->get('class', '');
+    $placed = preg_match('/(?:^|\s)!?absolute(?:!)?(?:\s|$)/', $callerClass) === 1;
+    $base = ($placed ? '' : 'relative ').'inline-flex items-center justify-center gap-1.5 font-medium whitespace-nowrap '
         .'rounded-md border transition-[background-color,border-color,box-shadow,color] duration-100 '
         .'focus-visible:outline-2 focus-visible:outline-offset-2 '
         .'disabled:pointer-events-none disabled:opacity-50 select-none';
