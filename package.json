@@ -7,24 +7,24 @@
         "dev": "vite"
     },
     "devDependencies": {
-        "@tailwindcss/vite": "^4.0.0",
-        "concurrently": "^10.0.6",
-        "laravel-vite-plugin": "^3.1",
+        "@tailwindcss/vite": "^4.3.4",
+        "concurrently": "^10.0.7",
+        "laravel-vite-plugin": "^3.2",
         "tailwindcss": "^4.0.0",
-        "vite": "^8.3.5"
+        "vite": "^8.3.8"
     },
     "optionalDependencies": {
         "@laravel/multiplex": "^0.4.5"
     },
     "dependencies": {
-        "@tiptap/core": "^3.32.1",
+        "@tiptap/core": "^3.33.0",
         "@tiptap/extension-link": "^3.31.3",
-        "@tiptap/extension-mention": "^3.32.1",
-        "@tiptap/extension-task-item": "^3.32.1",
-        "@tiptap/extension-task-list": "^3.32.1",
+        "@tiptap/extension-mention": "^3.33.0",
+        "@tiptap/extension-task-item": "^3.33.0",
+        "@tiptap/extension-task-list": "^3.33.0",
         "@tiptap/extensions": "^3.31.4",
-        "@tiptap/pm": "^3.32.1",
-        "@tiptap/starter-kit": "^3.32.1",
+        "@tiptap/pm": "^3.33.0",
+        "@tiptap/starter-kit": "^3.33.0",
         "@tiptap/suggestion": "^3.31.3",
         "sortablejs": "^1.15.7"
     },
