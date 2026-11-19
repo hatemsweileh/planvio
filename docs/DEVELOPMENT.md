@@ -1164,9 +1164,9 @@ php scripts/build-release.php
 
 Output: two archives, named from `config/planvio.php → version`.
 
-- `dist/planvio-v1.2.0.zip` — fresh install. Empty storage skeleton, installer, production
+- `dist/planvio-v1.4.0.zip` — fresh install. Empty storage skeleton, installer, production
   `vendor/`, compiled assets.
-- `dist/planvio-v1.2.0-update.zip` — in-place update. The same tree without `storage/` or
+- `dist/planvio-v1.4.0-update.zip` — in-place update. The same tree without `storage/` or
   `bootstrap/cache/`, plus `UPDATE.txt`. Extracting it over a live directory leaves `.env`,
   uploads and the install lock in place. The application records the new version on the
   next request.

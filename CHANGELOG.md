@@ -16,6 +16,46 @@ Nothing yet.
 
 ---
 
+## [1.4.0] — 2026-11-19
+
+An application release. The database version stays `1.0.0`: this release adds no migrations.
+Installations of 1.0.0 or 1.2.0 update by uploading `planvio-v1.4.0-update.zip` over the
+directory they already run. New installations use `planvio-v1.4.0.zip` and the browser
+installer.
+
+### Security
+
+- Laravel 13.43.0. The 12.72 fixes are merged into this release. Signed URL expiry can no
+  longer be bypassed by a numeric query fragment or an array `expires` parameter. The
+  `not_regex` rule no longer passes when its pattern fails to match. Fluent `where()`
+  constraints on `exists` and `unique` are compared literally, and every condition on the
+  same column is kept. The decimal rule no longer accepts a crafted value that backtracks.
+  Escaping, dynamic component names, and component attributes are validated so a value
+  cannot break out of them. The debug page no longer copies a request URL that can carry
+  markup. Mass assignment no longer disagrees with a mutator about the attribute name.
+  File validation no longer treats an empty colliding field as an uploaded file. JSON
+  Schema `$ref` chains are bounded.
+- Filament 5.11.4. A resource page that overrides authorization is honoured, and an
+  unbounded bulk selection loads record keys only.
+- Guzzle 8.5.2 and Monolog 3.13.0, the versions Laravel 13.43.0 resolves.
+
+### Changed
+
+- Two release archives, as in 1.2.0. `planvio-v1.4.0.zip` is a fresh install.
+  `planvio-v1.4.0-update.zip` leaves `storage/` and `bootstrap/cache/` out. After the
+  update archive is extracted, the next request or cron run records application version
+  1.4.0 and does not change `db_version`.
+
+### Notes
+
+- Requires PHP 8.3 or 8.4 and MySQL 5.7+ / MariaDB 10.6+. Unchanged from 1.0.0.
+- No schema change. `db_version` stays `1.0.0`. There is no migration step and no upgrade
+  screen for this release.
+- A fresh install still starts at the browser wizard. An update does not. See
+  [docs/UPGRADING.md](docs/UPGRADING.md).
+
+---
+
 ## [1.2.0] — 2026-10-18
 
 An application release. The database version stays `1.0.0`: this release adds no migrations.
@@ -166,6 +206,7 @@ First public release.
 - Known boundaries are documented in [docs/LIMITATIONS.md](docs/LIMITATIONS.md) rather than
   left for you to discover.
 
-[Unreleased]: https://github.com/hatemsweileh/planvio/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/hatemsweileh/planvio/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/hatemsweileh/planvio/compare/v1.2.0...v1.4.0
 [1.2.0]: https://github.com/hatemsweileh/planvio/compare/v1.0.0...v1.2.0
 [1.0.0]: https://github.com/hatemsweileh/planvio/releases/tag/v1.0.0

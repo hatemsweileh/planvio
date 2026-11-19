@@ -87,8 +87,8 @@ Database host      localhost
 1. Open **File Manager**.
 2. Navigate to your account's home directory (`/home/youraccount`), *not* `public_html`.
 3. Create a folder called `planvio`.
-4. Enter it, click **Upload**, and upload `planvio-v1.2.0.zip` (the fresh-install archive,
-   not `planvio-v1.2.0-update.zip`).
+4. Enter it, click **Upload**, and upload `planvio-v1.4.0.zip` (the fresh-install archive,
+   not `planvio-v1.4.0-update.zip`).
 5. Back in File Manager, right-click the ZIP and choose **Extract**. Extract into
    `/home/youraccount/planvio`.
 6. Delete the ZIP once extraction finishes.

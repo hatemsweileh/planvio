@@ -13,7 +13,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * An uploaded 1.2.0 adopts itself on an installation that is still recorded as 1.0.0.
+ * An uploaded 1.4.0 adopts itself on an installation that is still recorded as 1.0.0.
  *
  * The files live in a temporary directory. The boot hook is covered separately, and it
  * must not run against this working tree: the suite sets APP_INSTALLED, so a hook that
@@ -43,7 +43,7 @@ final class ReleaseUpdateTest extends TestCase
     #[Test]
     public function the_shipped_versions_agree(): void
     {
-        $this->assertSame('1.2.0', Version::app());
+        $this->assertSame('1.4.0', Version::app());
         $this->assertSame('1.0.0', Version::db());
         $this->assertSame(Version::app(), config('planvio.version'));
         $this->assertSame(Version::db(), config('planvio.db_version'));
@@ -96,7 +96,7 @@ final class ReleaseUpdateTest extends TestCase
         try {
             $this->assertTrue($this->updater($lock)->apply());
 
-            $this->assertSame('1.2.0', $this->settings()->get('app_version'));
+            $this->assertSame('1.4.0', $this->settings()->get('app_version'));
             $this->assertSame('0.0.1', $this->settings()->get('db_version'));
 
             $this->assertFileDoesNotExist($this->root.'/bootstrap/cache/config.php');
@@ -111,7 +111,7 @@ final class ReleaseUpdateTest extends TestCase
             $this->assertFileExists($this->root.'/bootstrap/cache/linked.php');
 
             $recorded = json_decode((string) file_get_contents($lock), true);
-            $this->assertSame('1.2.0', $recorded['version']);
+            $this->assertSame('1.4.0', $recorded['version']);
             $this->assertSame('1.0.0', $recorded['db_version']);
             $this->assertSame('2026-09-09T00:00:00+00:00', $recorded['installed_at']);
 

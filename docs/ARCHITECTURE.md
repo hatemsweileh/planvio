@@ -5,7 +5,7 @@
 > do not "improve" names. If something is missing, follow the nearest documented
 > pattern rather than inventing a new one.
 
-Version: 1.2.0 · Laravel 13 · Filament 5 · Livewire 4 · PHP >= 8.3 · MySQL 8 / MariaDB 10.6+
+Version: 1.4.0 · Laravel 13 · Filament 5 · Livewire 4 · PHP >= 8.3 · MySQL 8 / MariaDB 10.6+
 
 ---
 
